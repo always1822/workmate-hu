@@ -3,5 +3,12 @@
   "rootDirectory": "frontend",
   "installCommand": "npm install --legacy-peer-deps",
   "buildCommand": "npm run build",
-  "outputDirectory": "build"
+  "outputDirectory": "build",
+  "build": {
+    "env": {
+      "CI": "false",
+      "GENERATE_SOURCEMAP": "false",
+      "NODE_OPTIONS": "--max-old-space-size=4096"
+    }
+  }
 }
