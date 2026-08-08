@@ -1,13 +1,11 @@
 import { useEffect, useState } from "react";
-import { NavLink, useLocation } from "react-router-dom";
-import {
-  LayoutDashboard, Users, Hammer, FileText, Building2, FolderOpen, ClockFading,
-  Menu, X, Moon, Sun, ChevronLeft, Receipt, BarChart3, Settings2, LogOut, Wallet, CalendarDays,
-} from "lucide-react";
+import { NavLink, useLocation, Link } from "react-router-dom";
+import { LayoutDashboard, Users, Hammer, FileText, Building2, FolderOpen, ClockFading, Menu, X, Moon, Sun, ChevronLeft, Receipt, ChartBar as BarChart3, Settings2, LogOut, Wallet, CalendarDays } from "lucide-react";
 import { cn } from "../lib/utils";
 import { useAuth } from "../context/AuthContext";
 import { GlobalSearch } from "./GlobalSearch";
 import { NotificationBell } from "./NotificationBell";
+import { PublicFooter } from "./PublicShell";
 
 const NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, id: "dashboard" },
@@ -150,6 +148,7 @@ export const Shell = ({ children }) => {
           </div>
         </header>
         <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-10 lg:py-10">{children}</main>
+        <PublicFooter />
       </div>
     </div>
   );
