@@ -1,0 +1,47 @@
+{
+  "summary": "Iteration 4 (final production check) completed. Backend: created /app/backend/tests/backend_test_v4.py (22 new tests, all pass) covering public POST /api/contacts (200 no auth + 422 invalid/missing), GET /api/search (401 no auth, empty for <2 chars, multi-kind results for 'kov', strict user isolation), GET /api/customers/{id}/history (returns customer+jobs+quotes+invoices+payments+documents+stats with all 8 stat keys, 404 for other-user id), GET /api/calendar (401 no auth, events sorted asc, user-scoped), 9-endpoint auth-guard regression. Combined pytest run: 62/62 passed across backend_test.py + backend_test_v3.py + backend_test_v4.py. Frontend Playwright: /belepes shows marketing hero 'Vezesd vállalkozásodat egyszerűbben.' + 4 perks + 4 legal links; forgot toggle hides password; all 4 public routes (/kapcsolat, /adatkezeles, /aszf, /impresszum) load unauthenticated with PublicFooter and © 2026 copyright and all 4 footer links; Contact form submits (contact-success block shown, contact-new-btn resets); demo login works; all 12 sidebar items present (dashboard/customers/jobs/quotes/invoices/finance/reports/calendar/worklog/documents/company/settings); global-search returns 7 hits for 'kov', clicking a result navigates to /ugyfelek, search-empty shown for 'zzzzzqqqq99'; open-customer-{id} navigates to customer-detail-page with all 6 cust-stat-* cards and jobs/quotes/invoices/payments cards visible, back-to-customers returns; Calendar page grid + month header change on prev/next, upcoming panel visible; logged-in user CAN access /kapcsolat, /aszf, /adatkezeles, /impresszum (all render PublicShell not app Shell); Mobile 390x844: /kapcsolat readable, sidebar-open hamburger opens sidebar.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "PublicShell header (when a logged-in user visits /kapcsolat, /aszf, etc.)", "issues": ["Top-right link still says 'Belépés' and points to /belepes even though the user is authenticated. Minor UX: could read 'Vissza az alkalmazásba' → '/' for logged-in users. Non-blocking."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/backend/tests/backend_test_v3.py",
+    "/app/backend/tests/backend_test_v4.py",
+    "/app/test_reports/pytest/iter4_all.xml",
+    "/app/test_reports/pytest/iter4_v4.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: PublicShell.jsx – show 'Vissza az alkalmazásba' (link to '/') instead of 'Belépés' when user is authenticated, to avoid confusion when a logged-in user opens a public link like /kapcsolat.",
+    "OPTIONAL (from iter3, still open): Jobs.jsx EMPTY.status='uj' and Quotes.jsx EMPTY.status='vazlat' remain — browser masks it via select fallback, but should read 'erdeklodo' / 'piszkozat' for clarity."
+  ],
+  "critical_code_review_comments": [
+    "server.py grew to 1057 lines. Still readable but consider splitting into auth.py / crud.py / pdf.py / email.py / search.py before further growth.",
+    "/api/search performs 6 sequential Mongo queries per keystroke (250ms debounce in FE helps). Fine for MVP scale; consider Mongo text indexes on {user_id, title/name/number} for larger datasets.",
+    "customer_history: `payments` and `documents` are correlated by `customer_name` (string) rather than `customer_id`. If a customer is renamed, historical payments/documents will silently detach. Add `customer_id` to Payment and Document (populate on create) for referential integrity.",
+    "/api/calendar iterates 3 collections in-memory and sorts client-side. For > few thousand rows across all users this is still O(N) per user which is fine, but the `date` field is stored as a string — comparison relies on ISO 'YYYY-MM-DD' being lexicographically sortable. Any non-ISO date entered by user would break sort order. Consider Pydantic validator to enforce date format.",
+    "PublicShell header shows 'Belépés' regardless of auth state (minor UX).",
+    "Global search debounce is 250 ms which is fine, but there is no request cancellation for stale in-flight calls; a slow response for 'ka' could overwrite results for 'kar'. Consider AbortController.",
+    "/api/contacts stores every submission in the `contacts` collection but there is no admin endpoint to list/handle them, and no rate limiting on the unauthenticated route — could be spammed. Consider IP-based rate limit or captcha before public launch.",
+    "PDF generation via ReportLab reads company logo from disk on every request; acceptable but a cached Image object would speed repeat renders.",
+    "reset_password: token is single-use and marked used=true — good. No cleanup job for expired unused tokens; a TTL index on expires_at would keep the collection lean."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test_v4.py (new)",
+    "/app/test_reports/iteration_4.json (new)"
+  ],
+  "success_rate": {"backend": "100% (62/62 pytest across v1+v3+v4)", "frontend": "100% of critical flows validated: marketing login, public routes + footer with 2026 copyright, contact form submit+success, demo login, 12-item sidebar, global search (results + navigate + empty), customer history detail page with all stats/cards + back nav, calendar month navigation + upcoming/overdue panels, logged-in access to public pages, mobile viewport"},
+  "test_credentials": "demo@workmate.hu / workmate123 (auto-seeded on backend start). E-mail test recipient: delivered@resend.dev. New users freely creatable via POST /api/auth/register.",
+  "seed_data_creation": "Several TESTZZ_/TESTHIST/TESTCALJOB_A/TEST_kiadas/TEST-Q-*/TEST-INV-* rows created by tests under fresh registered users; demo account got one TEST contact form submission (contacts collection). Seed idempotency (verified in iter3) still passes.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend: run `cd /app/backend && pytest tests/backend_test.py tests/backend_test_v3.py tests/backend_test_v4.py` (62 tests). pytest.ini pins -n 2 --dist loadscope. NOTE: pytest default `python_files = test_*.py` does not match `backend_test*.py`, so a naked `pytest tests/` only collects backend_test.py (24). Always pass explicit file list, or add `python_files = *_test.py backend_test*.py` to pytest.ini. Frontend: public routes are matched inside both branches of Gate() in App.js — logged-in users get PublicShell (no sidebar) on /kapcsolat, /aszf, /adatkezeles, /impresszum. Global search debounce is 250ms, use wait_for_selector('search-results') not is_visible(). Calendar month header format is 'Hónap ÉÉÉÉ' e.g. 'Augusztus 2026'.",
+  "rca of the issue": "No new bugs found in iteration 4. All previously-fixed issues (files ?auth= JWT decoding, seed idempotency, extended job/quote statuses) still working. Only observation is a minor UX polish on PublicShell header link when a logged-in user visits a public page."
+}

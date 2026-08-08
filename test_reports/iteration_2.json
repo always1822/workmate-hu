@@ -1,0 +1,30 @@
+{
+  "summary": "Full backend + frontend testing of WorkMate HU v2 (JWT auth, user_id scoping, invoices, reports, settings, onboarding). Backend: 24/24 pytest cases pass covering auth (register/login/duplicate/wrong-pwd/me), 401 protection for /customers /jobs /quotes /invoices /worklogs /documents /dashboard /reports /company, CRITICAL user data isolation (userA cannot GET/PUT/DELETE userB's records — all return 404; new user dashboard shows 0 customers), full Quote→Job→Invoice pipeline (quote-to-job sets quote status='elfogadva', job-to-invoice creates invoice with quote items + sets job='szamlazva', idempotent), invoice PDF (application/pdf, %PDF header, >1KB), reports payload structure (12 months). Frontend Playwright: /belepes loads, demo login (demo@workmate.hu/workmate123) works, dashboard shows all 6 stat cards (stat-customers/jobs/quotes/invoices/monthly-revenue/yearly-revenue), all 10 sidebar nav items visible & clickable (dashboard, customers, jobs, quotes, invoices, reports, worklog, documents, company, settings), sidebar-collapse works (264→84px), Reports page shows report-yearly/paid/unpaid/acceptance + revenue-chart + top-customers-card + report-summary-card, Settings page shows correct user data (Demo Vállalkozó / demo@workmate.hu / WorkMate Demo Kft.), settings-theme-btn toggles html.dark class, Invoice modal opens, inv-item-desc/qty/price fields fillable, invoice-totals correctly computes Nettó 2000 / ÁFA 540 / Bruttó 2540, save-invoice-btn persists, quote-to-job-{id} and job-to-invoice-{id} flow work end-to-end, invoice PDF endpoint returns 200 application/pdf via Bearer token, sidebar-logout redirects to /belepes, registration creates new isolated user with onboarding-banner visible, mobile (390x844) sidebar-open hamburger works.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Új fiók onboarding / seed", "issue": "Fresh user shows 6 seeded customers instead of 3. Cause: Dashboard.jsx useEffect calls POST /api/seed, and React StrictMode invokes the effect twice in dev; the two concurrent seed requests both see count_documents==0 and both run insert_many (race condition on the guard). Isolation itself is intact (fresh user does NOT see demo user's data), only seed duplication.", "affected_selectors": ["stat-customers", "stat-jobs"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "Optional: make /api/seed race-safe (e.g. atomic check-and-insert or use MongoDB unique index / seeded flag on user) OR guard the frontend useEffect with a ref so StrictMode double-invocation does not fire two seed requests. Current impact: only cosmetic (fresh account gets 6/8/4 instead of 3/4/2 demo rows)."
+  ],
+  "critical_code_review_comments": [
+    "server.py: /api/seed lacks atomic guard against concurrent invocation → double-seeding on React StrictMode. Consider adding a `seeded: true` field on the user document set on first successful seed, or use insert_one with unique index on (user_id, name) to become idempotent.",
+    "server.py build_pdf font path glob runs at first request; already cached in module-global _FONTS.",
+    "current_user reads JWT_SECRET from env — good; but JWT tokens have 7-day expiry with no refresh mechanism (acceptable for MVP).",
+    "Data isolation is thoroughly correct: every CRUD query filters by user_id and returns 404 on other-user IDs. Verified by parametrized cross-user test.",
+    "Register endpoint returns 400 on duplicate email (not 409); acceptable but 409 is more semantic.",
+    "server.py DEMO_PASSWORD is only used at startup to seed demo user; production should rotate or remove."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py", "/app/test_reports/iteration_2.json"],
+  "success_rate": {"backend": "100% (24/24)", "frontend": "100% of critical flows"},
+  "test_credentials": "demo@workmate.hu / workmate123 (auto-seeded on backend startup). Tests also create fresh users via /api/auth/register.",
+  "seed_data_creation": "Demo user was seeded on backend startup. Multiple TEST_-prefixed users, customers, jobs, quotes, invoices created during tests (some cleaned up, some remain — isolated per test user, safe).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend tests file: /app/backend/tests/backend_test.py (pytest, uses REACT_APP_BACKEND_URL from /app/frontend/.env). Run: pytest /app/backend/tests/backend_test.py -v. All 24 tests green. Auth is Bearer JWT via Authorization header AND fallback to cookie. Fresh users trigger POST /api/seed on first dashboard load; StrictMode double-fires causes 6/8/4 rows instead of 3/4/2 — cosmetic only. Data isolation across users is verified and correct."
+}

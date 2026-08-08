@@ -1,0 +1,55 @@
+[{
+	"_id": {
+		"$oid": "6a756ee70450a0e1b889051b"
+	},
+	"id": "19366122-073d-4956-b163-b8a54322d741",
+	"user_id": "20fc55db-a865-460d-a67c-cb905b0461aa",
+	"created_at": "2026-08-07T05:36:39.307456+00:00",
+	"number": "SZ-2026-001",
+	"customer_id": "05ee4cb1-c69b-465a-a40b-d1350ded80c6",
+	"customer_name": "Kovács Építő Kft.",
+	"job_id": "ed2c19b2-d2c3-42be-98f7-203111200c3e",
+	"title": "Kerítés építés",
+	"status": "fizetve",
+	"issue_date": "2026-08-01",
+	"due_date": "2026-08-07",
+	"payment_method": "atutalas",
+	"vat_rate": 27,
+	"notes": "",
+	"items": [
+		{
+			"description": "Kerítés építés",
+			"quantity": 1.0,
+			"unit": "alk",
+			"unit_price": 700787.0
+		}
+	]
+},
+{
+	"_id": {
+		"$oid": "6a756ee70450a0e1b889051c"
+	},
+	"id": "9c66fa3a-5129-4757-a4e5-3d340bd679d5",
+	"user_id": "20fc55db-a865-460d-a67c-cb905b0461aa",
+	"created_at": "2026-08-07T05:36:39.307473+00:00",
+	"number": "SZ-2026-002",
+	"customer_id": "5b19ece1-6e40-4f62-ad1f-39a83c8d1d96",
+	"customer_name": "Nagy Autószerviz",
+	"job_id": "b4d410d1-5c40-4ce7-8992-37f056ae3362",
+	"title": "Villanyszerelés bővítés",
+	"status": "kiallitva",
+	"issue_date": "2026-08-07",
+	"due_date": "2026-08-15",
+	"payment_method": "atutalas",
+	"vat_rate": 27,
+	"notes": "",
+	"items": [
+		{
+			"description": "Villanyszerelés",
+			"quantity": 16.0,
+			"unit": "óra",
+			"unit_price": 15748.0
+		}
+	]
+}]
+

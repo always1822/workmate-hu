@@ -1,0 +1,63 @@
+[{
+	"_id": {
+		"$oid": "6a756ee70450a0e1b8890519"
+	},
+	"id": "67582333-d846-4cbb-9207-61f7047bbe64",
+	"user_id": "20fc55db-a865-460d-a67c-cb905b0461aa",
+	"created_at": "2026-08-07T05:36:39.307060+00:00",
+	"number": "AJ-2026-001",
+	"customer_id": "05ee4cb1-c69b-465a-a40b-d1350ded80c6",
+	"customer_name": "Kovács Építő Kft.",
+	"title": "Tetőfelújítás komplett",
+	"status": "elkuldve",
+	"valid_until": "2026-09-06",
+	"vat_rate": 27,
+	"notes": "Az ár tartalmazza az anyagot és a munkadíjat.",
+	"items": [
+		{
+			"description": "Bontás és hordalék elszállítás",
+			"quantity": 1.0,
+			"unit": "alk",
+			"unit_price": 180000.0
+		},
+		{
+			"description": "Tetőcserép csere",
+			"quantity": 120.0,
+			"unit": "m2",
+			"unit_price": 6500.0
+		},
+		{
+			"description": "Szigetelés",
+			"quantity": 120.0,
+			"unit": "m2",
+			"unit_price": 3200.0
+		}
+	],
+	"job_id": ""
+},
+{
+	"_id": {
+		"$oid": "6a756ee70450a0e1b889051a"
+	},
+	"id": "b947277a-8699-4c13-8d0e-8fcec98e6cf3",
+	"user_id": "20fc55db-a865-460d-a67c-cb905b0461aa",
+	"created_at": "2026-08-07T05:36:39.307084+00:00",
+	"number": "AJ-2026-002",
+	"customer_id": "e6416f2c-b7b9-44f7-bbd9-5ea6e385dc6b",
+	"customer_name": "Szabó Ingatlan Zrt.",
+	"title": "Irodafestés",
+	"status": "piszkozat",
+	"valid_until": "2026-09-21",
+	"vat_rate": 27,
+	"notes": "",
+	"items": [
+		{
+			"description": "Falfestés 2 rétegben",
+			"quantity": 340.0,
+			"unit": "m2",
+			"unit_price": 1450.0
+		}
+	],
+	"job_id": ""
+}]
+

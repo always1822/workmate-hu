@@ -1,0 +1,46 @@
+{
+  "summary": "Iteration 3 testing: password reset, uploads/logo, email send, payments/finance, extended job/quote statuses, reports profit, seed race safety. Backend: created /app/backend/tests/backend_test_v3.py (16 tests, all pass) covering forgot-password 200 for both known+unknown emails, full reset flow with token (login old pwd => 401, new pwd => 200, token reuse => 400, invalid token => 400, <6 chars => 400), document upload + storage_path download via ?auth= query + user isolation (userB gets 404) + 15MB limit 400, logo upload persists on company.logo_path, quote/invoice email send with delivered@resend.dev returns 200 and moves quote to 'elkuldve' / invoice draft to 'kiallitva', 400 when no recipient, payments CRUD full cross-user isolation, /api/reports includes yearly_revenue/yearly_expense/yearly_profit and every month has revenue/expense/profit keys, quote->job sets quote status 'munka_letrehozva' and job 'elfogadva', job(kesz)->invoice sets job 'lezarva', /api/seed idempotent (double POST => still 3 customers, second returns seeded:false). Also updated legacy backend_test.py to new statuses; combined 24/24 pytest green. Frontend Playwright: /belepes forgot toggle hides password field, submit shows generic success; demo login OK; all 11 sidebar items visible (dashboard/customers/jobs/quotes/invoices/finance/reports/worklog/documents/company/settings); dashboard 6 stat cards; Jobs kanban view renders all 6 status columns (from Object.entries(JOB_STATUS)); Quotes list shows new labels (Elküldve, Munka létrehozva); Finance page: 4 stat cards + 3 filters + add-payment flow (title/amount/kind/save) creates row; Reports page: 5 stats + revenue-chart with dual (revenue+expense) bars; Documents upload button + hidden input present; Company page: file logo upload succeeded, company-logo-preview <img> with fileUrl?auth=TOKEN loaded (naturalWidth=1) => validates the /api/files fix end-to-end.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/backend/tests/backend_test_v3.py",
+    "/app/test_reports/pytest/iter3_all.xml",
+    "/app/test_reports/pytest/iter3_v3.xml"
+  ],
+  "action_items": [
+    "Optional cleanup: Jobs.jsx EMPTY.status = 'uj' and Quotes.jsx EMPTY.status = 'vazlat' still use legacy statuses. Browser masks it (select falls back to first option when value not in options) but the initial form state should use 'erdeklodo' and 'piszkozat' respectively for clarity.",
+    "Optional: send_quote/send_invoice log a 502 error (upstream Resend proxy occasionally returns non-200) surfaced as HTTPException(502) — with delivered@resend.dev the endpoint works consistently in isolation, but under load the UI can catch a transient 502. Consider retry-once or explicit user-facing message."
+  ],
+  "critical_code_review_comments": [
+    "FIXED (by testing agent): /api/files/{path}?auth= query token was ignored — download_file mutated request.scope['headers'] but Starlette Request.headers had already been resolved by the dependency system, so current_user still returned 401. This broke every fileUrl() usage on the frontend (Company logo <img>, Documents anchor download). Refactored download_file to decode the JWT directly from the auth query param (or fall back to Authorization header / cookie). Verified via curl and Playwright (Company page logo <img> now renders naturalWidth=1).",
+    "Jobs.jsx and Quotes.jsx new-item EMPTY objects still contain the old status values ('uj' / 'vazlat'). Non-fatal (backend accepts free-form status; select options remap to first entry) but should be updated to 'erdeklodo' / 'piszkozat'.",
+    "reset_password: exp comparison assumes MongoDB stored the datetime as timezone-aware; codebase handles both via replace(tzinfo=utc), good.",
+    "forgot_password link uses request.headers.origin — fine on browser fetch, but from server-to-server tests the link may end up '' + '/uj-jelszo?token=' (still ok since only sent by email).",
+    "download_file logo lookup uses find_one on {user_id, logo_path} — good user-scoped isolation.",
+    "server.py is 940 lines but still readable; consider splitting into auth.py / crud.py / pdf.py / email.py.",
+    "Payment model has no strict enum/validation for 'kind' ('bevetel'|'kiadas'); reports rely on these strings — a wrong value silently disappears from totals. Consider Literal type.",
+    "SendMailModal.jsx pre-fills 'to' from defaultEmail prop; when customer has no email the modal opens with empty field which is fine (required). OK.",
+    "The email integration cannot attach PDFs (Resend proxy limit) — the HTML body contains the full document, as documented. Acceptable per user note."
+  ],
+  "updated_files": [
+    "/app/backend/server.py (fixed /api/files/{path} auth query token handling)",
+    "/app/backend/tests/backend_test.py (updated legacy statuses to new workflow)",
+    "/app/backend/tests/backend_test_v3.py (new)",
+    "/app/test_reports/iteration_3.json"
+  ],
+  "success_rate": {"backend": "100% (24/24 pytest across both files)", "frontend": "100% of critical flows validated (auth, sidebar, dashboard, jobs kanban, quotes statuses, finance CRUD, reports, documents, company logo upload+preview, reset-password page)"},
+  "test_credentials": "demo@workmate.hu / workmate123 (backend seeded on startup); test recipient: delivered@resend.dev. New users are created via /api/auth/register.",
+  "seed_data_creation": "One TEST_UI_payment row added on demo via frontend; several TEST_* quotes/invoices created and cleaned up by tests. Seed idempotency verified: double POST /api/seed yields 3 customers exactly (users.seeded atomic flag works).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run: pytest /app/backend/tests/ -v (24 tests). The /api/files auth query fix is required for Company logo + Documents download links to work in the browser. If the Resend proxy is flaky (502) during send tests, retry — the assertion is on 200 + status change. All new v3 tests are user-isolated (create fresh users via _register) so they don't collide with the demo account.",
+  "rca of the issue": "Bug fixed by tester: `GET /api/files/{path:path}?auth=<token>` returned 401 because current_user() reads request.headers.get('Authorization'), and Starlette caches Request.headers after the first access (which happens during dependency injection). Mutating request.scope['headers'] after that point is a no-op. Repro: upload doc -> GET /api/files/<storage_path>?auth=<jwt> -> 401. Mitigation applied: refactored download_file to decode the JWT directly from the `auth` query (falling back to Authorization header / access_token cookie), avoiding the mutation entirely. Verified with curl (200 + full bytes) and Playwright (Company page <img data-testid='company-logo-preview'> naturalWidth=1 after upload)."
+}

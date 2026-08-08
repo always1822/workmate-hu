@@ -1,0 +1,127 @@
+{
+  "theme": "light_and_dark",
+  "typography": {
+    "heading_font": "Outfit",
+    "body_font": "Plus Jakarta Sans",
+    "strategy": "Swiss Brutalist meets Soft Utility. Use 'Outfit' for crisp, premium headings (tracking-tight) and 'Plus Jakarta Sans' for highly legible body text. Avoid generic fonts like Inter for headings. Maintain a high-contrast hierarchy where headings command attention.",
+    "h1": "text-4xl sm:text-5xl font-semibold tracking-tight",
+    "h2": "text-2xl sm:text-3xl font-semibold tracking-tight",
+    "h3": "text-xl sm:text-2xl font-medium",
+    "body": "text-base leading-relaxed text-secondary",
+    "small_labels": "text-xs font-semibold uppercase tracking-[0.1em] text-secondary"
+  },
+  "colors": {
+    "light": {
+      "background": "#f5f7fb",
+      "card": "#ffffff",
+      "primary": "#06b6d4",
+      "primary_hover": "#0891b2",
+      "text": "#1f2937",
+      "text_secondary": "#6b7280",
+      "border": "#e5e7eb",
+      "success": "#22c55e",
+      "warning": "#f59e0b",
+      "danger": "#ef4444"
+    },
+    "dark": {
+      "background": "#09090b",
+      "card": "#18181b",
+      "primary": "#06b6d4",
+      "primary_hover": "#22d3ee",
+      "text": "#f3f4f6",
+      "text_secondary": "#9ca3af",
+      "border": "#27272a",
+      "success": "#4ade80",
+      "warning": "#fbbf24",
+      "danger": "#f87171"
+    },
+    "rules": "Avoid large full-screen gradients. Use color primarily for semantic meaning (success/danger) and primary actions. Tint neutral greys slightly to match the background temperature."
+  },
+  "layouts": {
+    "global": "Fixed collapsible sidebar (w-64 expanded, w-20 collapsed) with smooth width transitions. The main content area should scroll independently, avoiding full-page scrolls.",
+    "main_content": "max-w-7xl mx-auto px-6 lg:px-10 py-8. Maintain generous whitespace (lots of negative space).",
+    "dashboard_grid": "Bento-style grid. 12-column base. Top row: 4 stat cards (col-span-3 each). Middle row: Main chart/recent list (col-span-8) and Quick actions (col-span-4).",
+    "cards": "bg-card border border-border rounded-[20px] shadow-sm p-6 or p-8. High padding is crucial for the premium Linear/Vercel feel.",
+    "tables": "Housed within rounded cards. Responsive wrapper. Modern headers with subtle bg (bg-slate-50 dark:bg-zinc-800/50), hover states on rows (hover:bg-slate-50 dark:hover:bg-zinc-800/50).",
+    "kanban": "Horizontal scrollable container with flex columns (w-80 per column). Cards inside have grab cursors and subtle lift on hover.",
+    "forms": "Use grid layout for forms. 2-column or 1-column layouts with generous vertical spacing (gap-6)."
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-[#06b6d4] hover:bg-[#0891b2] text-white rounded-xl h-11 px-6 font-medium transition-all shadow-sm",
+      "secondary": "bg-white dark:bg-[#18181b] border border-border hover:bg-slate-50 dark:hover:bg-zinc-800 text-text rounded-xl h-11 px-6 font-medium transition-all"
+    },
+    "inputs": "h-12 rounded-xl border border-border bg-transparent px-4 focus:ring-2 focus:ring-[#06b6d4]/20 focus:border-[#06b6d4] transition-all",
+    "sidebar_menu": "Active states MUST be highlighted. Hover animations on items (bg-slate-100 dark:bg-zinc-800 text-text).",
+    "badges": "Rounded-full px-3 py-1 text-xs font-medium. Use subtle background colors with strong text color (e.g., bg-green-100 text-green-700)."
+  },
+  "motion": {
+    "hover": "Subtle transform (-translate-y-[2px]) and box-shadow enhancement for interactive cards.",
+    "transitions": "Use specific transition properties. Example: 'transition-all duration-200 ease-in-out'. Avoid universal 'transition-all' on complex DOM elements if it breaks transforms.",
+    "page_load": "Staggered fade-in and slide-up (translate-y-4) for dashboard cards using Framer Motion."
+  },
+  "visual_enhancers": {
+    "shadows": "Use soft ambient shadows rather than harsh drop shadows. shadow-[0_2px_10px_-3px_rgba(6,181,212,0.1)] for active states.",
+    "borders": "1px solid borders are critical. No thick borders. Use border-border (which adapts to dark/light mode).",
+    "icons": "Use Phosphor Icons (Duotone or Regular) or Lucide Icons for a clean, consistent, and premium feel."
+  },
+  "modules": [
+    {
+      "name": "Dashboard",
+      "description": "Large stat cards, icons, quick action cards, and modern recent lists."
+    },
+    {
+      "name": "Ügyfelek (Customers)",
+      "description": "Table inside card, modern header, CRUD modals."
+    },
+    {
+      "name": "Munkák (Jobs)",
+      "description": "List and Kanban views."
+    },
+    {
+      "name": "Ajánlatok (Quotes)",
+      "description": "Form with line items for quotes, followed by PDF generation preview layout."
+    },
+    {
+      "name": "Céges profil (Company Profile)",
+      "description": "Clean, well-spaced settings form."
+    },
+    {
+      "name": "Dokumentumok (Documents)",
+      "description": "Grid of document cards."
+    },
+    {
+      "name": "Munkanapló (Work log)",
+      "description": "Timeline or table view of activities."
+    }
+  ],
+  "image_urls": {
+    "avatars": [
+      {
+        "url": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODh8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBoZWFkc2hvdCUyMGF2YXRhcnxlbnwwfHx8fDE3ODYwNzQ4MzR8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Man in black button-up shirt - useful for user profile avatar",
+        "category": "user_avatar"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODh8MHwxfHNlYXJjaHwzfHxwcm9mZXNzaW9uYWwlMjBoZWFkc2hvdCUyMGF2YXRhcnxlbnwwfHx8fDE3ODYwNzQ4MzR8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Man wearing Henley top portrait - useful for team member avatar",
+        "category": "team_avatar"
+      }
+    ]
+  },
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "Prioritize using pre-existing components from src/components/ui when applicable.",
+    "Every interaction needs micro-animations - hover states, transitions, and entrance animations. Static = dead.",
+    "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
+    "NEVER use complete transparent background in header, overlays, or any surface that has content under it.",
+    "All interactive and key informational elements MUST include a data-testid attribute to facilitate robust automated testing.",
+    "Use 'sonner' for toast notifications.",
+    "You MUST NOT center align the app container in CSS.",
+    "Do not use default generic AI slop aesthetics. Use crisp borders, soft shadows, and deep darks."
+  ],
+  "accessibility": {
+    "focus_states": "All interactive elements must have visible focus rings (focus-visible:ring-2).",
+    "contrast": "Ensure text contrast meets APCA/WCAG standards, especially for secondary text."
+  },
+  "instructions_to_main_agent": "Implement a full Business OS UI for 'WorkMate HU' based on these parameters. Build out the layout with a collapsible sidebar and a main content area. Include a theme toggle (Light/Dark). Construct the views for Dashboard, Customers, Jobs, Quotes, Profile, Documents, and Work Log using React and Tailwind CSS. Ensure all JS files use the styling rules provided, and rely on Shadcn/ui where appropriate."
+}

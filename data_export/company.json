@@ -1,0 +1,20 @@
+[{
+	"_id": {
+		"$oid": "6a755b559e22382413e50275"
+	},
+	"user_id": "20fc55db-a865-460d-a67c-cb905b0461aa",
+	"name": "TEST_Cég Ő",
+	"contact_name": "Demo Vállalkozó",
+	"tax_number": "98765432-1-41",
+	"reg_number": "01-09-123456",
+	"address": "1136 Budapest, Hegedűs Gyula u. 8.",
+	"email": "demo@workmate.hu",
+	"phone": "+36 1 234 5678",
+	"website": "workmate.hu",
+	"bank_account": "12345678-12345678-12345678",
+	"logo_url": "",
+	"logo_path": "",
+	"quote_footer": "Köszönjük, hogy minket választott!",
+	"onboarded": true
+}]
+

@@ -1,0 +1,43 @@
+[{
+	"_id": {
+		"$oid": "6a756ee70450a0e1b889051d"
+	},
+	"id": "0fbffdc4-8b82-462c-bd82-98b681007826",
+	"user_id": "20fc55db-a865-460d-a67c-cb905b0461aa",
+	"created_at": "2026-08-07T05:36:39.307774+00:00",
+	"date": "2026-08-05",
+	"job_id": "564c3ba6-b2e8-4cea-8d63-38dcb5a7979b",
+	"job_title": "Tetőszigetelés felújítás",
+	"worker": "Kis János",
+	"hours": 8.0,
+	"description": "Bontási munkák"
+},
+{
+	"_id": {
+		"$oid": "6a756ee70450a0e1b889051e"
+	},
+	"id": "0366298e-f0f2-4572-a456-1901d081d9e4",
+	"user_id": "20fc55db-a865-460d-a67c-cb905b0461aa",
+	"created_at": "2026-08-07T05:36:39.307786+00:00",
+	"date": "2026-08-06",
+	"job_id": "564c3ba6-b2e8-4cea-8d63-38dcb5a7979b",
+	"job_title": "Tetőszigetelés felújítás",
+	"worker": "Kis János",
+	"hours": 6.5,
+	"description": "Szigetelés előkészítés"
+},
+{
+	"_id": {
+		"$oid": "6a756ee70450a0e1b889051f"
+	},
+	"id": "f6f9b404-e604-4adf-bc93-0b78d27dc1a3",
+	"user_id": "20fc55db-a865-460d-a67c-cb905b0461aa",
+	"created_at": "2026-08-07T05:36:39.307794+00:00",
+	"date": "2026-08-06",
+	"job_id": "0b0dad06-9296-4b92-b2c2-2b252305683c",
+	"job_title": "Iroda festés – 3. emelet",
+	"worker": "Tóth Gábor",
+	"hours": 4.0,
+	"description": "Felmérés"
+}]
+

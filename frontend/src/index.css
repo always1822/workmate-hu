@@ -1,0 +1,114 @@
+@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    :root {
+        --background: 220 43% 97%;
+        --foreground: 215 19% 27%;
+        --card: 0 0% 100%;
+        --card-foreground: 215 19% 27%;
+        --popover: 0 0% 100%;
+        --popover-foreground: 215 19% 27%;
+        --primary: 189 94% 43%;
+        --primary-foreground: 0 0% 100%;
+        --secondary: 220 30% 96%;
+        --secondary-foreground: 215 19% 27%;
+        --muted: 220 30% 96%;
+        --muted-foreground: 220 9% 46%;
+        --accent: 220 30% 96%;
+        --accent-foreground: 215 19% 27%;
+        --destructive: 0 84% 60%;
+        --destructive-foreground: 0 0% 100%;
+        --border: 220 13% 91%;
+        --input: 220 13% 91%;
+        --ring: 189 94% 43%;
+        --sidebar: 0 0% 100%;
+        --radius: 0.875rem;
+    }
+    .dark {
+        --background: 240 6% 4%;
+        --foreground: 220 14% 96%;
+        --card: 240 4% 10%;
+        --card-foreground: 220 14% 96%;
+        --popover: 240 4% 10%;
+        --popover-foreground: 220 14% 96%;
+        --primary: 189 94% 43%;
+        --primary-foreground: 0 0% 100%;
+        --secondary: 240 4% 14%;
+        --secondary-foreground: 220 14% 96%;
+        --muted: 240 4% 14%;
+        --muted-foreground: 220 9% 65%;
+        --accent: 240 4% 14%;
+        --accent-foreground: 220 14% 96%;
+        --destructive: 0 91% 71%;
+        --destructive-foreground: 240 6% 4%;
+        --border: 240 4% 16%;
+        --input: 240 4% 16%;
+        --ring: 189 94% 43%;
+        --sidebar: 240 5% 7%;
+    }
+}
+
+@layer base {
+    * {
+        @apply border-border;
+    }
+    body {
+        @apply bg-background text-foreground;
+        margin: 0;
+        font-family: "Plus Jakarta Sans", sans-serif;
+        -webkit-font-smoothing: antialiased;
+    }
+    h1,
+    h2,
+    h3,
+    h4,
+    .font-display {
+        font-family: "Outfit", sans-serif;
+        letter-spacing: -0.02em;
+    }
+    ::selection {
+        background: hsl(189 94% 43% / 0.25);
+    }
+}
+
+@layer components {
+    .wm-card {
+        @apply bg-card border border-border rounded-[20px] shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-12px_rgba(16,24,40,0.08)];
+    }
+    .wm-label {
+        @apply text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground;
+    }
+    .wm-scroll::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+    .wm-scroll::-webkit-scrollbar-thumb {
+        @apply bg-border rounded-full;
+    }
+    .wm-scroll::-webkit-scrollbar-track {
+        background: transparent;
+    }
+}
+
+@keyframes wm-rise {
+    from {
+        opacity: 0;
+        transform: translateY(14px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+.wm-rise {
+    animation: wm-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@layer base {
+    [data-debug-wrapper="true"] {
+        display: contents !important;
+    }
+}

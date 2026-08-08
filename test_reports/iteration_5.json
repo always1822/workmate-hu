@@ -1,0 +1,43 @@
+{
+  "summary": "Iteration 5 (export-readiness final check) completed. Backend: created /app/backend/tests/backend_test_v5.py (7 new tests, all pass) covering (1) GET /api/ root endpoint returns {message: 'WorkMate HU API', status: 'ok'}, (2) demo dashboard shape (3 customers, 2 active_jobs, 2 invoices, positive monthly_revenue=1209998.85, hours_logged>=18), (3) demo customer names (Kovács Építő Kft., Szabó Ingatlan Zrt., Nagy Autószerviz), (4) end-to-end business flow with a fresh registered user: create customer → create quote with 2 line items → download quote PDF (200 application/pdf, %PDF magic bytes) → POST /api/quotes/{id}/job (quote-to-job) → PUT job status='kesz' → POST /api/jobs/{id}/invoice (job-to-invoice) → invoice PDF → PUT invoice status='fizetve' → dashboard/reports reflect new invoice, (5) data isolation from demo account (customer IDs disjoint, 404 on cross-user GET/DELETE), (6) 8 endpoints return 401 without token, (7) register→logout→login round-trip. Combined pytest across backend_test.py + backend_test_v3.py + backend_test_v4.py + backend_test_v5.py: 67/69 passed (24+31+7+7=69 total; 2 email-send tests failed with upstream 502 Cloudflare error from Resend proxy – known flaky, documented by main agent in the review request). seed_db.py CLI verified: `python seed_db.py` correctly detects existing demo user + skips (idempotent). Frontend Playwright: /belepes register flow works with (auth-name-input, auth-company-input, auth-email-input, auth-password-input, auth-submit-btn) and auto-navigates to Dashboard; sidebar-logout works and same credentials log back in; all 12 sidebar navigations (nav-dashboard/customers/jobs/quotes/invoices/finance/reports/calendar/worklog/documents/company/settings) load respective pages with 0 console errors and 0 error elements; global-search 'kov' shows search-results dropdown; open-customer-{id} → customer-detail-page renders with stats, jobs, quotes, invoices, payments cards.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/quotes/{id}/send + /api/invoices/{id}/send", "issue": "Intermittent 502 from Resend upstream proxy (Cloudflare error page returned instead of 200). Known flaky per main agent. Retry logic present but sometimes both retries fail. Not blocking – functional code path is correct, tests pass in isolation when upstream is healthy."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/backend/tests/backend_test_v3.py",
+    "/app/backend/tests/backend_test_v4.py",
+    "/app/backend/tests/backend_test_v5.py",
+    "/app/test_reports/pytest/iter5_all.xml",
+    "/app/test_reports/pytest/iter5_v5.xml"
+  ],
+  "action_items": [
+    "No new action items. All export-readiness criteria verified. Optional carry-overs from prior iterations (PublicShell 'Belépés' link for logged-in users, Jobs/Quotes EMPTY.status label) still open but non-blocking."
+  ],
+  "critical_code_review_comments": [
+    "server.py at 1070 lines includes duplicated demo-seed logic in /api/seed (auto-seed on registration) AND now seed_db.py CLI (near-identical). Consider extracting seed_data() into a shared module (backend/seed_common.py) that both server.py and seed_db.py import, so demo data drift stays impossible.",
+    "/api/seed uses fixed date strings ('2026-07-15', '2026-06-18', etc.) while seed_db.py uses relative today+/-N days — a user auto-seeded via FE gets stale hard-coded dates, while CLI-seeded demo gets fresh dates. Unify to relative dates in both.",
+    "seed_db.py imports models directly from server (`from server import ...`), which triggers server.py module init (routes registration, mongo client, etc.) as a side-effect. Consider splitting models into backend/models.py to keep CLI startup lean.",
+    "docs/INSTALLATION.md + docs/DATABASE_SCHEMA.md + README.md + backend/.env.example + frontend/.env.example: present and readable (spot-checked). No issue.",
+    "GET /api/ root endpoint returned successfully as required."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test_v5.py (new)",
+    "/app/test_reports/iteration_5.json (new)"
+  ],
+  "success_rate": {"backend": "97% (67/69 pytest; 2 upstream-flaky email tests)", "frontend": "100% of critical export-readiness flows validated: root endpoint, register+login+logout roundtrip, 12-item sidebar navigation with zero console errors, dashboard/customers/jobs/quotes/invoices/finance/reports/calendar/worklog/documents/company/settings all render, global search, customer detail page, quote→job→invoice PDF chain (via API)."},
+  "test_credentials": "demo@workmate.hu / workmate123. E-mail test recipient: delivered@resend.dev. New users freely creatable via /belepes → Regisztrálj.",
+  "seed_data_creation": "test_full_business_flow creates ~1 fresh user with a TEST_E2E customer + TEST-Q-E2E-01 quote + generated job + auto-generated SZ-* invoice. Demo account untouched. Auto-/api/seed runs on every registered user (documented behavior).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend pytest: `cd /app/backend && pytest tests/backend_test.py tests/backend_test_v3.py tests/backend_test_v4.py tests/backend_test_v5.py` (69 tests, expect 67-69 pass; 2 email tests flaky on Cloudflare 502 from Resend – re-run once if seen). Endpoint names to remember: quote→job is POST /api/quotes/{id}/job (not /to-job); job→invoice is POST /api/jobs/{id}/invoice; reports is GET /api/reports (not /reports/summary). /api/seed is auto-called by FE after registration and idempotently populates 3 customers/4 jobs/2 quotes/2 invoices/3 worklogs/3 docs/3 payments into the NEW user's account – this is intentional onboarding, not a data-leak; the demo account's rows remain isolated by user_id (verified). seed_db.py CLI is separate and only touches the DEMO account by default. The FE-side dashboard for a freshly-registered user will show 3 customers etc. because /api/seed ran – do not report as data isolation bug.",
+  "rca of the issue": "No new bugs. During UI testing a fresh registered user's Dashboard appeared to show demo data (3 customers, 1 209 999 Ft revenue, Kovács/Nagy jobs). Initial suspicion of data-leak was ruled out by (a) direct API call confirming a freshly-registered user starts with customers=0 before any /api/seed call, (b) observed network trace showing FE calls POST /api/seed immediately after /api/auth/register which is the intentional onboarding auto-seed (server.py:971 – guarded by users.seeded flag, idempotent), and (c) pytest test_isolation_from_demo confirming distinct customer IDs between demo and new users. Behavior is by design and matches the review request wording ('a demo fiókkal ... belépve a Dashboard 3 ügyfelet ... mutat')."
+}

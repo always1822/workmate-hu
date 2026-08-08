@@ -1,0 +1,52 @@
+[{
+	"_id": {
+		"$oid": "6a756ee70450a0e1b8890520"
+	},
+	"id": "3229643d-3389-4603-9cf2-9eb2b288c69c",
+	"user_id": "20fc55db-a865-460d-a67c-cb905b0461aa",
+	"created_at": "2026-08-07T05:36:39.308048+00:00",
+	"name": "Vállalkozói szerződés – Kovács.pdf",
+	"category": "szerzodes",
+	"customer_id": "05ee4cb1-c69b-465a-a40b-d1350ded80c6",
+	"customer_name": "Kovács Építő Kft.",
+	"job_id": "",
+	"size_kb": 340.0,
+	"url": "",
+	"storage_path": "",
+	"content_type": ""
+},
+{
+	"_id": {
+		"$oid": "6a756ee70450a0e1b8890521"
+	},
+	"id": "5a589db8-b5c5-49f6-bdec-f9907c8161dc",
+	"user_id": "20fc55db-a865-460d-a67c-cb905b0461aa",
+	"created_at": "2026-08-07T05:36:39.308059+00:00",
+	"name": "Teljesítésigazolás.pdf",
+	"category": "igazolas",
+	"customer_id": "5b19ece1-6e40-4f62-ad1f-39a83c8d1d96",
+	"customer_name": "Nagy Autószerviz",
+	"job_id": "",
+	"size_kb": 120.0,
+	"url": "",
+	"storage_path": "",
+	"content_type": ""
+},
+{
+	"_id": {
+		"$oid": "6a756ee70450a0e1b8890522"
+	},
+	"id": "498568c7-95db-42b9-8c9b-28878fb7e953",
+	"user_id": "20fc55db-a865-460d-a67c-cb905b0461aa",
+	"created_at": "2026-08-07T05:36:39.308065+00:00",
+	"name": "Anyagszámla – tetőcserép.pdf",
+	"category": "szamla",
+	"customer_id": "05ee4cb1-c69b-465a-a40b-d1350ded80c6",
+	"customer_name": "Kovács Építő Kft.",
+	"job_id": "",
+	"size_kb": 88.0,
+	"url": "",
+	"storage_path": "",
+	"content_type": ""
+}]
+
