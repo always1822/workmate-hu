@@ -1,6 +1,4 @@
 {
-  "framework": "create-react-app",
-  "rootDirectory": "frontend",
   "installCommand": "npm install --legacy-peer-deps",
   "buildCommand": "CI=false GENERATE_SOURCEMAP=false craco build",
   "outputDirectory": "build"
