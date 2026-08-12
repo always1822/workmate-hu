@@ -11,3 +11,4 @@ email-validator
 dnspython
 bcrypt==4.1.3
 pydantic[email]
+requests
