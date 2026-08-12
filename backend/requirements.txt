@@ -14,3 +14,4 @@ pydantic[email]
 requests
 httpx
 boto3
+PyJWT
