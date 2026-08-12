@@ -63,6 +63,7 @@ export const PAYMENT_CATEGORIES = {
 export const INVOICE_STATUS = {
   vazlat: { label: "Vázlat", cls: "bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-zinc-300" },
   kiallitva: { label: "Kiállítva", cls: "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300" },
+  lejart: { label: "Lejárt", cls: "bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-300" },
   fizetve: { label: "Fizetve", cls: "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300" },
 };
 
@@ -73,4 +74,18 @@ export const quoteTotals = (q) => {
     + Number(q.material_cost || 0) + Number(q.labor_cost || 0);
   const vat = (net * Number(q.vat_rate || 0)) / 100;
   return { net, vat, gross: net + vat };
+};
+
+export const invTotal = (inv) => Number(inv.total ?? quoteTotals(inv).gross);
+
+export const downloadFile = async (storagePath, name = "fajl") => {
+  const res = await api.get(`/files/${storagePath}`, { responseType: "blob" });
+  const url = URL.createObjectURL(res.data);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 };

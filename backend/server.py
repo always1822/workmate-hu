@@ -11,10 +11,12 @@ import secrets
 from services import (put_object, get_object, storage_path, send_email,
                       doc_email_html, reset_email_html)
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import ReturnDocument
 import os
 import io
 import glob
 import logging
+import re
 import uuid
 import bcrypt
 import jwt
@@ -153,7 +155,7 @@ async def reset_password(payload: ResetIn):
 
 
 # ---------- Generic owned CRUD ----------
-def crud(path: str, coll: str, model, model_in):
+def crud(path: str, coll: str, model, model_in, before_create=None):
     @api_router.get(f"/{path}", response_model=List[model])
     async def list_items(user: dict = Depends(current_user)):
         docs = await db[coll].find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(1000)
@@ -161,7 +163,10 @@ def crud(path: str, coll: str, model, model_in):
 
     @api_router.post(f"/{path}", response_model=model)
     async def create_item(payload: model_in, user: dict = Depends(current_user)):
-        obj = model(**payload.model_dump(), user_id=user["id"])
+        data = payload.model_dump()
+        if before_create:
+            await before_create(user, data)
+        obj = model(**data, user_id=user["id"])
         await db[coll].insert_one(obj.model_dump())
         return obj
 
@@ -191,12 +196,315 @@ def crud(path: str, coll: str, model, model_in):
 
 
 crud("customers", "customers", Customer, CustomerIn)
-crud("jobs", "jobs", Job, JobIn)
-crud("quotes", "quotes", Quote, QuoteIn)
-crud("invoices", "invoices", Invoice, InvoiceIn)
+
+
+async def _auto_quote_number(user: dict, data: dict):
+    """Ajánlat létrehozásakor automatikus sorszám (AJ-<év>-<XXX>), ha nincs megadva."""
+    if not data.get("number"):
+        year = datetime.now(timezone.utc).year
+        data["number"] = await next_doc_number(user["id"], year, f"AJ-{year}-", "quote_seq", "quotes")
+
+
+crud("quotes", "quotes", Quote, QuoteIn, before_create=_auto_quote_number)
 crud("worklogs", "worklogs", WorkLog, WorkLogIn)
 crud("documents", "documents", Document, DocumentIn)
 crud("payments", "payments", Payment, PaymentIn)
+
+
+# ---------- Számla segédfüggvények ----------
+def fmt_ft(v: float) -> str:
+    return f"{float(v or 0):,.0f} Ft".replace(",", " ")
+
+
+def invoice_total(doc: dict) -> float:
+    """Számla bruttó összege: a tárolt total, ha van, egyébként a tételekből számolt."""
+    t = doc.get("total")
+    if t is not None and float(t) > 0:
+        return float(t)
+    return totals(doc)[2]
+
+
+def eff_status(doc: dict) -> str:
+    """Effektív számlastátusz: a Lejárt a fizetési határidőből automatikusan számított."""
+    s = doc.get("status", "")
+    if s == "kiallitva":
+        due = str(doc.get("due_date") or "")
+        if due:
+            try:
+                if datetime.fromisoformat(due[:10]).date() < datetime.now(timezone.utc).date():
+                    return "lejart"
+            except ValueError:
+                pass
+    return s
+
+
+def is_issued(doc: dict) -> bool:
+    return eff_status(doc) in ("kiallitva", "lejart", "fizetve")
+
+
+async def next_doc_number(user_id: str, year: int, prefix: str, seq_key: str, coll) -> str:
+    """Atomikus, évenként újrainduló sorszám: <prefix><XXX> (pl. SZ-2026-001, AJ-2026-001)."""
+    key = f"{seq_key}_{user_id}_{year}"
+    doc = await db.counters.find_one({"_id": key})
+    if doc is None:
+        # Első használat: a meglévő legnagyobb sorszám után indulunk
+        max_seq = 0
+        for d in await db[coll].find({"user_id": user_id, "number": {"$regex": f"^{re.escape(prefix)}"}},
+                                     {"number": 1}).to_list(1000):
+            try:
+                max_seq = max(max_seq, int(d["number"][len(prefix):]))
+            except (ValueError, IndexError):
+                pass
+        try:
+            await db.counters.insert_one({"_id": key, "seq": max_seq})
+        except Exception:
+            pass
+    res = await db.counters.find_one_and_update({"_id": key}, {"$inc": {"seq": 1}},
+                                                return_document=ReturnDocument.AFTER)
+    return f"{prefix}{res['seq']:03d}"
+
+
+async def next_invoice_number(user_id: str, year: int) -> str:
+    """Atomikus, évenként újrainduló számlasorszám: SZ-<év>-<XXX>."""
+    return await next_doc_number(user_id, year, f"SZ-{year}-", "invoice_seq", "invoices")
+
+
+async def log_change(user: dict, kind: str, action: str, entity_id: str, title: str, detail: str = ""):
+    """Munkanapló: minden releváns változás rögzítése (ki, mikor, mit)."""
+    await db.changes.insert_one({
+        "id": str(uuid.uuid4()), "user_id": user["id"], "created_at": now_iso(),
+        "actor": user.get("name", "") or user.get("email", ""),
+        "kind": kind, "action": action, "entity_id": entity_id,
+        "title": title, "detail": detail,
+    })
+
+
+async def _invoice_from_job(job: dict, user: dict) -> Invoice:
+    """Számla létrehozása munkából: az ajánlat tételei, ÁFA-ja és végösszege öröklődik."""
+    vat_rate = 27
+    quote = await db.quotes.find_one({"job_id": job["id"], "user_id": user["id"]}, {"_id": 0})
+    if quote:
+        vat_rate = float(quote.get("vat_rate") or 27)
+        # Az ajánlat tételei változatlan szerkezettel öröklődnek (nincs mesterséges tétel)
+        items = [LineItem(**i) for i in (quote.get("items") or [])]
+        # Az ajánlat végösszege a TELJES ajánlatból számolódik (tételek + anyagköltség + munkadíj)
+        gross = totals(quote)[2]
+        if gross <= 0:
+            gross = float(job.get("value") or 0)
+        # Konzisztencia: a számla tételei pontosan fedjék a végösszeget, hogy a nettó/ÁFA/bruttó
+        # és a tárolt összeg mindenhol (lista, PDF, statisztika) azonos legyen
+        items_gross = totals({"items": [i.model_dump() for i in items], "vat_rate": vat_rate})[2]
+        if items_gross > 0 and abs(items_gross - gross) > 0.01:
+            factor = gross / items_gross
+            for it in items:
+                it.unit_price = round(float(it.unit_price) * factor, 2)
+        elif items_gross <= 0 and gross > 0:
+            # A tétel(ek) nulla értékűek, de az ajánlatnak van értéke (pl. anyag-/munkadíj):
+            # egyetlen, valós összeget hordozó tétel készül az első tétel megnevezésével
+            first = items[0] if items else None
+            items = [LineItem(description=(first.description if first else job.get("title", "Elvégzett munka")),
+                              quantity=1, unit=(first.unit if first else "alk"),
+                              unit_price=round(gross / (1 + vat_rate / 100), 2))]
+    else:
+        gross = float(job.get("value") or 0)
+        items = [LineItem(description=job.get("title", "Elvégzett munka"), quantity=1, unit="alk",
+                          unit_price=round(gross / (1 + vat_rate / 100), 2) if gross else 0)]
+    if not items:
+        items = [LineItem(description=job.get("title", "Elvégzett munka"), quantity=1, unit="alk", unit_price=0)]
+    today = datetime.now(timezone.utc).date()
+    number = await next_invoice_number(user["id"], today.year)
+    inv = Invoice(user_id=user["id"], number=number,
+                  customer_id=job.get("customer_id", ""), customer_name=job.get("customer_name", ""),
+                  job_id=job["id"], title=job.get("title", ""), status="kiallitva",
+                  issue_date=today.isoformat(), due_date=(today + timedelta(days=8)).isoformat(),
+                  vat_rate=vat_rate, items=items)
+    inv.total = gross if gross > 0 else totals(inv.model_dump())[2]
+    return inv
+
+
+# ---------- Munkák (státuszváltás naplózása) ----------
+@api_router.get("/jobs", response_model=List[Job])
+async def list_jobs(user: dict = Depends(current_user)):
+    docs = await db.jobs.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    return [Job(**d) for d in docs]
+
+
+@api_router.post("/jobs", response_model=Job)
+async def create_job(payload: JobIn, user: dict = Depends(current_user)):
+    obj = Job(**payload.model_dump(), user_id=user["id"])
+    await db.jobs.insert_one(obj.model_dump())
+    await log_change(user, "munka", "letrehozas", obj.id, obj.title)
+    return obj
+
+
+@api_router.get("/jobs/{job_id}", response_model=Job)
+async def get_job(job_id: str, user: dict = Depends(current_user)):
+    doc = await db.jobs.find_one({"id": job_id, "user_id": user["id"]}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Nem található")
+    return Job(**doc)
+
+
+@api_router.put("/jobs/{job_id}", response_model=Job)
+async def update_job(job_id: str, payload: JobIn, user: dict = Depends(current_user)):
+    doc = await db.jobs.find_one({"id": job_id, "user_id": user["id"]}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Nem található")
+    old_status = doc.get("status", "")
+    for k, v in payload.model_dump().items():
+        doc[k] = v
+    doc["user_id"] = user["id"]
+    await db.jobs.replace_one({"id": job_id, "user_id": user["id"]}, doc)
+    new_status = payload.model_dump().get("status")
+    if new_status and new_status != old_status:
+        await log_change(user, "munka", "statusz_modositas", job_id, doc.get("title", ""),
+                         f"{old_status} → {new_status}")
+    return Job(**doc)
+
+
+@api_router.delete("/jobs/{job_id}")
+async def delete_job(job_id: str, user: dict = Depends(current_user)):
+    res = await db.jobs.delete_one({"id": job_id, "user_id": user["id"]})
+    if res.deleted_count == 0:
+        raise HTTPException(404, "Nem található")
+    return {"ok": True}
+
+
+# ---------- Számlák (automatikus sorszám, +8 nap, egyedi job_id, Lejárt státusz) ----------
+@api_router.get("/invoices", response_model=List[Invoice])
+async def list_invoices(user: dict = Depends(current_user)):
+    docs = await db.invoices.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    out = []
+    for d in docs:
+        d = dict(d)
+        d["total"] = invoice_total(d)
+        d["status"] = eff_status(d)
+        out.append(Invoice(**d))
+    return out
+
+
+@api_router.post("/invoices", response_model=Invoice)
+async def create_invoice(payload: InvoiceIn, user: dict = Depends(current_user)):
+    data = payload.model_dump()
+    job = None
+    if data.get("job_id"):
+        job = await db.jobs.find_one({"id": data["job_id"], "user_id": user["id"]}, {"_id": 0})
+        if not job:
+            raise HTTPException(404, "Munka nem található")
+        existing = await db.invoices.find_one({"job_id": data["job_id"], "user_id": user["id"]}, {"_id": 0})
+        if existing:
+            raise HTTPException(400, "Ehhez a munkához már létezik számla")
+    if job:
+        inv = await _invoice_from_job(job, user)
+    else:
+        today = datetime.now(timezone.utc).date()
+        issue = str(data.get("issue_date") or today.isoformat())[:10]
+        number = await next_invoice_number(user["id"], today.year)
+        items = [LineItem(**i) for i in (data.get("items") or [])]
+        try:
+            due = (datetime.fromisoformat(issue).date() + timedelta(days=8)).isoformat()
+        except ValueError:
+            due = ""
+        inv = Invoice(user_id=user["id"], number=number,
+                      customer_id=data.get("customer_id", ""), customer_name=data.get("customer_name", ""),
+                      job_id=data.get("job_id", ""), title=data.get("title") or "Számla",
+                      status=data.get("status") or "kiallitva", issue_date=issue, due_date=due,
+                      payment_method=data.get("payment_method") or "atutalas",
+                      vat_rate=float(data.get("vat_rate") or 27), notes=data.get("notes") or "",
+                      items=items)
+        inv.total = totals(inv.model_dump())[2]
+    await db.invoices.insert_one(inv.model_dump())
+    await log_change(user, "szamla", "letrehozas", inv.id, f"{inv.number} – {inv.customer_name or inv.title}",
+                     f"Bruttó {fmt_ft(inv.total)}")
+    out = inv.model_dump()
+    out["total"] = invoice_total(out)
+    out["status"] = eff_status(out)
+    return Invoice(**out)
+
+
+@api_router.get("/invoices/{invoice_id}", response_model=Invoice)
+async def get_invoice(invoice_id: str, user: dict = Depends(current_user)):
+    doc = await db.invoices.find_one({"id": invoice_id, "user_id": user["id"]}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Nem található")
+    doc = dict(doc)
+    doc["total"] = invoice_total(doc)
+    doc["status"] = eff_status(doc)
+    return Invoice(**doc)
+
+
+@api_router.put("/invoices/{invoice_id}", response_model=Invoice)
+async def update_invoice(invoice_id: str, payload: InvoiceIn, user: dict = Depends(current_user)):
+    doc = await db.invoices.find_one({"id": invoice_id, "user_id": user["id"]}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Nem található")
+    old_total = invoice_total(doc)
+    old_status = doc.get("status", "")
+    data = payload.model_dump()
+    changes_log = []
+
+    # Összeg/tétel konzisztencia: a PUT-ban megadott összeg az irányadó (inline szerkesztés,
+    # Fizetve gomb, modál-mentés), a tételeket ehhez arányosan igazítjuk, hogy a PDF és a
+    # statisztikák mindig ugyanazt az értéket mutassák. Tétel-módosításnál a frontend a
+    # tételekből számolt összeget küldi – így az is mindig konzisztens.
+    new_total = data.get("total")
+    if new_total is not None:
+        new_total = float(new_total)
+    if data.get("items") is not None:
+        doc["items"] = [LineItem(**i).model_dump() for i in data["items"]]
+    if new_total is None:
+        doc["total"] = totals(doc)[2]
+    elif abs(new_total - old_total) > 0.01:
+        computed = totals(doc)[2]
+        if computed > 0 and abs(computed - new_total) > 0.01:
+            factor = new_total / computed
+            for it in doc["items"]:
+                it["unit_price"] = round(float(it.get("unit_price") or 0) * factor, 4)
+        doc["total"] = new_total
+        changes_log.append(("osszeg_modositas", f"{fmt_ft(old_total)} → {fmt_ft(new_total)}"))
+    else:
+        doc["total"] = new_total
+    for k in ("customer_id", "customer_name", "title", "payment_method", "notes"):
+        if data.get(k) is not None:
+            doc[k] = data[k]
+    doc["vat_rate"] = float(data.get("vat_rate") if data.get("vat_rate") is not None else doc.get("vat_rate") or 27)
+
+    issue = str(data.get("issue_date") or doc.get("issue_date") or datetime.now(timezone.utc).date().isoformat())[:10]
+    doc["issue_date"] = issue
+    if data.get("due_date"):
+        doc["due_date"] = str(data["due_date"])[:10]
+    else:
+        try:
+            doc["due_date"] = (datetime.fromisoformat(issue).date() + timedelta(days=8)).isoformat()
+        except ValueError:
+            doc["due_date"] = ""
+
+    new_status = data.get("status") or doc.get("status", "kiallitva")
+    if new_status == "lejart":
+        new_status = "kiallitva"  # a Lejárt csak megjelenített státusz
+    if new_status != old_status:
+        doc["status"] = new_status
+        changes_log.append(("statusz_modositas", f"{old_status} → {new_status}"))
+    else:
+        doc["status"] = new_status
+
+    doc["user_id"] = user["id"]
+    await db.invoices.replace_one({"id": invoice_id, "user_id": user["id"]}, doc)
+    for action, detail in changes_log:
+        await log_change(user, "szamla", action, invoice_id,
+                         f"{doc.get('number', '')} – {doc.get('customer_name') or doc.get('title')}", detail)
+    out = dict(doc)
+    out["total"] = invoice_total(out)
+    out["status"] = eff_status(out)
+    return Invoice(**out)
+
+
+@api_router.delete("/invoices/{invoice_id}")
+async def delete_invoice(invoice_id: str, user: dict = Depends(current_user)):
+    res = await db.invoices.delete_one({"id": invoice_id, "user_id": user["id"]})
+    if res.deleted_count == 0:
+        raise HTTPException(404, "Nem található")
+    return {"ok": True}
 
 
 # ---------- File upload / download ----------
@@ -301,10 +609,12 @@ async def quote_to_job(quote_id: str, user: dict = Depends(current_user)):
     _, _, gross = totals(q)
     job = Job(user_id=user["id"], title=q.get("title") or "Munka ajánlatból", customer_id=q.get("customer_id", ""),
               customer_name=q.get("customer_name", ""), status="tervezett", value=gross,
-              description=q.get("notes", ""), quote_id=quote_id)
+              description=q.get("description") or q.get("notes", ""), quote_id=quote_id)
     await db.jobs.insert_one(job.model_dump())
     await db.quotes.update_one({"id": quote_id, "user_id": user["id"]},
                                {"$set": {"job_id": job.id, "status": "elfogadva"}})
+    await log_change(user, "ajanlat", "elfogadas", quote_id, q.get("title") or q.get("number", ""),
+                     f"Munka létrehozva: {job.title} ({fmt_ft(gross)})")
     return job
 
 
@@ -315,104 +625,151 @@ async def job_to_invoice(job_id: str, user: dict = Depends(current_user)):
         raise HTTPException(404, "Munka nem található")
     existing = await db.invoices.find_one({"job_id": job_id, "user_id": user["id"]}, {"_id": 0})
     if existing:
-        return Invoice(**existing)
-    items = []
-    quote = await db.quotes.find_one({"job_id": job_id, "user_id": user["id"]}, {"_id": 0})
-    if quote and quote.get("items"):
-        items = [LineItem(**i) for i in quote["items"]]
-        vat_rate = float(quote.get("vat_rate") or 27)
-    else:
-        gross = float(job.get("value") or 0)
-        vat_rate = 27
-        items = [LineItem(description=job.get("title", "Elvégzett munka"), quantity=1, unit="alk",
-                          unit_price=round(gross / (1 + vat_rate / 100), 2))]
-    count = await db.invoices.count_documents({"user_id": user["id"]})
-    today = datetime.now(timezone.utc).date()
-    inv = Invoice(user_id=user["id"], number=f"SZ-{today.year}-{str(count + 1).zfill(3)}",
-                  customer_id=job.get("customer_id", ""), customer_name=job.get("customer_name", ""),
-                  job_id=job_id, title=job.get("title", ""), status="vazlat",
-                  issue_date=today.isoformat(), due_date=(today + timedelta(days=8)).isoformat(),
-                  vat_rate=vat_rate, items=items)
+        raise HTTPException(400, "Ehhez a munkához már létezik számla")
+    inv = await _invoice_from_job(job, user)
     await db.invoices.insert_one(inv.model_dump())
-    await db.jobs.update_one({"id": job_id, "user_id": user["id"]}, {"$set": {"status": "elkeszult"}})
-    return inv
+    await log_change(user, "szamla", "letrehozas", inv.id, f"{inv.number} – {inv.customer_name or inv.title}",
+                     f"Bruttó {fmt_ft(inv.total)}")
+    out = inv.model_dump()
+    out["total"] = invoice_total(out)
+    out["status"] = eff_status(out)
+    return Invoice(**out)
 
 
-# ---------- Dashboard & reports ----------
-@api_router.get("/dashboard")
-async def dashboard(user: dict = Depends(current_user)):
-    uid = user["id"]
+# ---------- Központi statisztika (Dashboard, Pénzügy, Riportok közös forrása) ----------
+async def compute_stats(uid: str) -> dict:
+    """Minden statisztika az aktuális adatokból számolódik – nincs gyorstárazott, eltérő érték."""
     customers = await db.customers.count_documents({"user_id": uid})
     jobs = await db.jobs.find({"user_id": uid}, {"_id": 0}).to_list(1000)
     quotes = await db.quotes.find({"user_id": uid}, {"_id": 0}).to_list(1000)
     invoices = await db.invoices.find({"user_id": uid}, {"_id": 0}).to_list(1000)
     logs = await db.worklogs.find({"user_id": uid}, {"_id": 0}).to_list(1000)
     payments = await db.payments.find({"user_id": uid}, {"_id": 0}).to_list(1000)
+
     active = [j for j in jobs if j.get("status") in ("tervezett", "folyamatban")]
     open_quotes = [q for q in quotes if q.get("status") == "letrehozva"]
-    issued = [i for i in invoices if i.get("status") in ("kiallitva", "fizetve")]
+    issued_inv = [i for i in invoices if is_issued(i)]
     now = datetime.now(timezone.utc)
+    year = now.year
     month_prefix = now.strftime("%Y-%m")
 
     def gross(d):
-        return totals(d)[2]
+        return invoice_total(d)
+
+    monthly_revenue = sum(gross(i) for i in issued_inv if str(i.get("issue_date", "")).startswith(month_prefix))
+    yearly_revenue = sum(gross(i) for i in issued_inv if str(i.get("issue_date", "")).startswith(str(year)))
+    paid_revenue = sum(gross(i) for i in invoices if eff_status(i) == "fizetve")
+    unpaid_value = sum(gross(i) for i in invoices if eff_status(i) in ("kiallitva", "lejart"))
+    overdue_value = sum(gross(i) for i in invoices if eff_status(i) == "lejart")
+
+    def month_expense(m):
+        return sum(float(p.get("amount") or 0) for p in payments
+                   if p.get("kind") == "kiadas" and str(p.get("date", "")).startswith(m))
+
+    def month_extra(m):
+        return sum(float(p.get("amount") or 0) for p in payments
+                   if p.get("kind") == "bevetel" and str(p.get("date", "")).startswith(m))
+
+    months = []
+    for m in range(1, 13):
+        key = f"{year}-{str(m).zfill(2)}"
+        rel = [i for i in issued_inv if str(i.get("issue_date", "")).startswith(key)]
+        revenue = sum(gross(i) for i in rel) + month_extra(key)
+        expense = month_expense(key)
+        months.append({"month": key, "revenue": revenue, "expense": expense,
+                       "profit": revenue - expense, "count": len(rel)})
+
+    by_customer = {}
+    for i in issued_inv:
+        by_customer[i.get("customer_name") or "Egyéb"] = by_customer.get(i.get("customer_name") or "Egyéb", 0) + gross(i)
+
+    accepted = len([q for q in quotes if q.get("status") == "elfogadva"])
+    yearly_expense = sum(m["expense"] for m in months)
+    extra_income = sum(m["revenue"] for m in months) - yearly_revenue
+    profit = yearly_revenue + extra_income - yearly_expense
+    # A Dashboard „Következő lépések” listájához: mi vár a felhasználóra
+    to_invoice = len([j for j in jobs if j.get("status") == "elkeszult"
+                      and not any(i.get("job_id") == j.get("id") for i in invoices)])
+    unpaid_invoices = len([i for i in invoices if eff_status(i) in ("kiallitva", "lejart")])
 
     return {
+        "year": year,
         "customers": customers,
         "active_jobs": len(active),
         "open_quotes": len(open_quotes),
         "open_quotes_value": sum(gross(q) for q in open_quotes),
         "invoices": len(invoices),
-        "monthly_revenue": sum(gross(i) for i in issued if str(i.get("issue_date", "")).startswith(month_prefix)),
-        "yearly_revenue": sum(gross(i) for i in issued if str(i.get("issue_date", "")).startswith(str(now.year))),
-        "unpaid_value": sum(gross(i) for i in invoices if i.get("status") == "kiallitva"),
-        "monthly_expense": sum(float(p.get("amount") or 0) for p in payments
-                               if p.get("kind") == "kiadas" and str(p.get("date", "")).startswith(month_prefix)),
+        "invoice_count": len(invoices),
+        "monthly_revenue": monthly_revenue,
+        "yearly_revenue": yearly_revenue,
+        "paid_revenue": paid_revenue,
+        "unpaid_value": unpaid_value,
+        "unpaid_revenue": unpaid_value,
+        "overdue_value": overdue_value,
+        "monthly_expense": month_expense(month_prefix),
+        "yearly_expense": yearly_expense,
+        "extra_income": extra_income,
+        "profit": profit,
+        "yearly_profit": profit,
         "closed_jobs": len([j for j in jobs if j.get("status") == "elkeszult"]),
+        "to_invoice": to_invoice,
+        "unpaid_invoices": unpaid_invoices,
         "pipeline": sum(float(j.get("value") or 0) for j in active),
         "hours_logged": sum(float(l.get("hours") or 0) for l in logs),
         "jobs_by_status": {s: len([j for j in jobs if j.get("status") == s]) for s in ("tervezett", "folyamatban", "elkeszult")},
+        "months": months,
+        "top_customers": sorted([{"name": k, "revenue": v} for k, v in by_customer.items()], key=lambda x: -x["revenue"])[:5],
+        "quote_acceptance": round(accepted / len(quotes) * 100) if quotes else 0,
+    }
+
+
+@api_router.get("/stats")
+async def stats(user: dict = Depends(current_user)):
+    return await compute_stats(user["id"])
+
+
+@api_router.get("/changes")
+async def changes(user: dict = Depends(current_user)):
+    """Munkanapló változás-feed: ki, mikor, mit módosított."""
+    docs = await db.changes.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return docs
+
+
+@api_router.get("/dashboard")
+async def dashboard(user: dict = Depends(current_user)):
+    uid = user["id"]
+    s = await compute_stats(uid)
+    jobs = await db.jobs.find({"user_id": uid}, {"_id": 0}).to_list(1000)
+    quotes = await db.quotes.find({"user_id": uid}, {"_id": 0}).to_list(1000)
+    invoices = await db.invoices.find({"user_id": uid}, {"_id": 0}).to_list(1000)
+
+    def gross(d):
+        return invoice_total(d)
+
+    return {
+        **s,
         "recent_jobs": sorted(jobs, key=lambda j: j.get("created_at", ""), reverse=True)[:5],
         "recent_quotes": [{**q, "total": gross(q)} for q in sorted(quotes, key=lambda q: q.get("created_at", ""), reverse=True)[:5]],
-        "recent_invoices": [{**i, "total": gross(i)} for i in sorted(invoices, key=lambda i: i.get("created_at", ""), reverse=True)[:5]],
+        "recent_invoices": [{**i, "total": gross(i), "status": eff_status(i)}
+                            for i in sorted(invoices, key=lambda i: i.get("created_at", ""), reverse=True)[:5]],
     }
 
 
 @api_router.get("/reports")
 async def reports(user: dict = Depends(current_user)):
-    uid = user["id"]
-    invoices = await db.invoices.find({"user_id": uid}, {"_id": 0}).to_list(1000)
-    jobs = await db.jobs.find({"user_id": uid}, {"_id": 0}).to_list(1000)
-    quotes = await db.quotes.find({"user_id": uid}, {"_id": 0}).to_list(1000)
-    payments = await db.payments.find({"user_id": uid}, {"_id": 0}).to_list(1000)
-    year = datetime.now(timezone.utc).year
-    months = []
-    for m in range(1, 13):
-        key = f"{year}-{str(m).zfill(2)}"
-        rel = [i for i in invoices if str(i.get("issue_date", "")).startswith(key) and i.get("status") in ("kiallitva", "fizetve")]
-        exp = sum(float(p.get("amount") or 0) for p in payments
-                  if p.get("kind") == "kiadas" and str(p.get("date", "")).startswith(key))
-        extra = sum(float(p.get("amount") or 0) for p in payments
-                    if p.get("kind") == "bevetel" and str(p.get("date", "")).startswith(key))
-        revenue = sum(totals(i)[2] for i in rel) + extra
-        months.append({"month": key, "revenue": revenue, "expense": exp, "profit": revenue - exp, "count": len(rel)})
-    by_customer = {}
-    for i in invoices:
-        if i.get("status") in ("kiallitva", "fizetve"):
-            by_customer[i.get("customer_name") or "Egyéb"] = by_customer.get(i.get("customer_name") or "Egyéb", 0) + totals(i)[2]
-    accepted = len([q for q in quotes if q.get("status") == "elfogadva"])
+    s = await compute_stats(user["id"])
     return {
-        "year": year,
-        "months": months,
-        "yearly_revenue": sum(m["revenue"] for m in months),
-        "yearly_expense": sum(m["expense"] for m in months),
-        "yearly_profit": sum(m["profit"] for m in months),
-        "paid_revenue": sum(totals(i)[2] for i in invoices if i.get("status") == "fizetve"),
-        "unpaid_revenue": sum(totals(i)[2] for i in invoices if i.get("status") == "kiallitva"),
-        "invoice_count": len(invoices),
-        "closed_jobs": len([j for j in jobs if j.get("status") == "elkeszult"]),
-        "quote_acceptance": round(accepted / len(quotes) * 100) if quotes else 0,
-        "top_customers": sorted([{"name": k, "revenue": v} for k, v in by_customer.items()], key=lambda x: -x["revenue"])[:5],
+        "year": s["year"],
+        "months": s["months"],
+        "yearly_revenue": s["yearly_revenue"],
+        "yearly_expense": s["yearly_expense"],
+        "yearly_profit": s["profit"],
+        "paid_revenue": s["paid_revenue"],
+        "unpaid_revenue": s["unpaid_value"],
+        "invoice_count": s["invoice_count"],
+        "closed_jobs": s["closed_jobs"],
+        "quote_acceptance": s["quote_acceptance"],
+        "top_customers": s["top_customers"],
     }
 
 
@@ -568,7 +925,16 @@ def build_pdf(doc, comp, cust, kind: str) -> bytes:
             c.setFont(base, 9)
 
     rate = float(doc.get("vat_rate") or 0)
-    vat = net * rate / 100
+    stored_total = float(doc.get("total") or 0)
+    computed = net + net * rate / 100
+    if stored_total > 0 and abs(computed - stored_total) > 0.5:
+        # A rendszerben tárolt bruttó az irányadó (a tétel-egységárak kerekítése miatt
+        # a tételekből számolt érték apró eltérést mutathat – a PDF, a táblázat és a
+        # statisztikák mindig ugyanazt az összeget mutassák)
+        net = stored_total / (1 + rate / 100) if rate else stored_total
+        vat = stored_total - net
+    else:
+        vat = net * rate / 100
     y -= 7 * mm
     c.setFont(base, 10)
     for lbl, val in [("Nettó összesen:", net), (f"ÁFA ({rate:g}%):", vat)]:
@@ -744,7 +1110,7 @@ async def calendar(user: dict = Depends(current_user)):
     events = []
     for j in await db.jobs.find({"user_id": uid, "deadline": {"$nin": ["", None]}}, {"_id": 0}).to_list(500):
         events.append({"id": j["id"], "date": j["deadline"], "kind": "munka", "title": j.get("title", ""),
-                       "subtitle": j.get("customer_name", ""), "status": j.get("status", ""), "route": "/munkak"})
+                       "subtitle": j.get("customer_name", ""), "status": j.get("status", ""), "route": f"/munkak/{j['id']}"})
     for q in await db.quotes.find({"user_id": uid, "valid_until": {"$nin": ["", None]}}, {"_id": 0}).to_list(500):
         events.append({"id": q["id"], "date": q["valid_until"], "kind": "ajanlat",
                        "title": q.get("title") or q.get("number", ""), "subtitle": q.get("customer_name", ""),

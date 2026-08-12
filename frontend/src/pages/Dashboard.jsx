@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Users, Hammer, FileText, Wallet, ArrowUpRight, Plus, TrendingUp, Clock, Sparkles, Receipt, CalendarRange,
+  Users, Hammer, FileText, Wallet, ArrowUpRight, Plus, TrendingUp, Sparkles, Receipt, CalendarRange,
 } from "lucide-react";
 import { api, fmtHuf, fmtDate, JOB_STATUS, QUOTE_STATUS, INVOICE_STATUS } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
@@ -25,13 +25,12 @@ const StatCard = ({ icon: Icon, label, value, sub, delay, testid }) => (
   </Card>
 );
 
-const QUICK = [
-  { to: "/ugyfelek", label: "Új ügyfél", desc: "Rögzíts partnert", icon: Users },
-  { to: "/munkak", label: "Új munka", desc: "Indíts projektet", icon: Hammer },
-  { to: "/ajanlatok", label: "Új ajánlat", desc: "PDF pár kattintással", icon: FileText },
-  { to: "/naptar", label: "Naptár", desc: "Határidők egy helyen", icon: CalendarRange },
-  { to: "/szamlak", label: "Számla készítése", desc: "Lezárt munkából", icon: Receipt },
-  { to: "/munkanaplo", label: "Óra rögzítés", desc: "Napi teljesítés", icon: Clock },
+// „Mit kell most csinálnom?” – a fő folyamat lépései, közvetlen művelettel
+const STEPS = (d) => [
+  { to: "/ajanlatok", label: "Elfogadásra váró ajánlatok", icon: FileText, count: d.open_quotes ?? 0, desc: "Elfogadáskor a munka automatikusan létrejön" },
+  { to: "/szamlak", label: "Számlázásra váró munkák", icon: Receipt, count: d.to_invoice ?? 0, desc: "Kész munka – számla 1 kattintással" },
+  { to: "/szamlak", label: "Kifizetetlen számlák", icon: Wallet, count: d.unpaid_invoices ?? 0, desc: `Összesen ${fmtHuf(d.unpaid_value)}` },
+  { to: "/munkak", label: "Folyamatban lévő munkák", icon: Hammer, count: d.active_jobs ?? 0, desc: "Kövesd nyomon a határidőket" },
 ];
 
 const greetingFor = (name) => {
@@ -69,9 +68,7 @@ export default function Dashboard() {
   return (
     <div data-testid="dashboard-page">
       <PageHeader title={greeting} subtitle="Íme a vállalkozásod mai állapota – kevesebb adminisztráció, több idő a munkára.">
-        <Button variant="secondary" data-testid="dashboard-report-btn">
-          <TrendingUp className="h-4 w-4" /> Riport
-        </Button>
+        <Link to="/riportok"><Button variant="secondary" data-testid="dashboard-report-btn"><TrendingUp className="h-4 w-4" /> Riport</Button></Link>
         <Link to="/ajanlatok"><Button data-testid="dashboard-new-quote-btn"><Plus className="h-4 w-4" /> Új ajánlat</Button></Link>
       </PageHeader>
 
@@ -125,27 +122,32 @@ export default function Dashboard() {
           )}
         </Card>
 
-        <Card className="wm-rise lg:col-span-4" style={{ animationDelay: "320ms" }} data-testid="quick-actions-card">
+        <Card className="wm-rise lg:col-span-4" style={{ animationDelay: "320ms" }} data-testid="next-steps-card">
           <div className="mb-6 flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-primary" />
-            <h2 className="font-display text-xl font-semibold">Gyors műveletek</h2>
+            <h2 className="font-display text-xl font-semibold">Következő lépések</h2>
           </div>
           <div className="space-y-3">
-            {QUICK.map(({ to, label, desc, icon: Icon }) => (
+            {STEPS(d).map(({ to, label, desc, count, icon: Icon }) => (
               <Link
                 key={label}
                 to={to}
-                data-testid={`quick-${to.slice(1)}`}
+                data-testid={`step-${to.slice(1)}`}
                 className="group flex items-center gap-4 rounded-2xl border border-border p-4 transition-all duration-200 hover:-translate-y-[2px] hover:border-primary/40 hover:bg-accent/50"
               >
-                <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary"><Icon className="h-4 w-4" /></div>
-                <div className="min-w-0">
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Icon className="h-4 w-4" /></div>
+                <div className="min-w-0 flex-1">
                   <div className="text-sm font-semibold">{label}</div>
                   <div className="text-xs text-muted-foreground">{desc}</div>
                 </div>
-                <ArrowUpRight className="ml-auto h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-1" />
+                <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${count > 0 ? "bg-primary/10 text-primary" : "bg-accent text-muted-foreground"}`}>{count}</span>
+                <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-1" />
               </Link>
             ))}
+          </div>
+          <div className="mt-5 flex items-center gap-5 border-t border-border pt-4">
+            <Link to="/penzugy" className="text-sm font-semibold text-primary hover:underline" data-testid="dash-finance-link">Pénzügy</Link>
+            <Link to="/riportok" className="text-sm font-semibold text-primary hover:underline" data-testid="dash-reports-link">Riportok</Link>
           </div>
         </Card>
 

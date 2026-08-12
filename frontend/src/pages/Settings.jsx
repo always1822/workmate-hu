@@ -1,6 +1,7 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { Moon, Sun, LogOut, User, Shield, Palette } from "lucide-react";
+import { Moon, Sun, LogOut, User, Shield, Palette, Building2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { Card, PageHeader } from "../components/Shell";
 import { Button, Field, Input } from "../components/Fields";
@@ -32,7 +33,10 @@ export default function Settings() {
             <Field label="Email cím"><Input value={user?.email || ""} readOnly data-testid="settings-email" /></Field>
             <Field label="Cégnév"><Input value={user?.company_name || ""} readOnly data-testid="settings-company" /></Field>
           </div>
-          <p className="mt-4 text-xs text-muted-foreground">A céges adatokat a Céges profil oldalon módosíthatod.</p>
+          <Link to="/ceges-profil" className="mt-5 inline-flex" data-testid="settings-company-link">
+            <Button variant="secondary"><Building2 className="h-4 w-4" /> Céges profil szerkesztése</Button>
+          </Link>
+          <p className="mt-3 text-xs text-muted-foreground">A céges adatok (név, adószám, bankszámla, logo) automatikusan megjelennek a számlákon és az ajánlatokon.</p>
         </Card>
 
         <div className="space-y-5">

@@ -111,28 +111,30 @@ class Invoice(Owned):
     customer_name: Optional[str] = ""
     job_id: Optional[str] = ""
     title: str = ""
-    status: str = "vazlat"  # vazlat | kiallitva | fizetve
+    status: str = "kiallitva"  # vazlat | kiallitva | fizetve (a Lejárt státusz a határidőből számított)
     issue_date: str = ""
     due_date: str = ""
     payment_method: str = "atutalas"
     vat_rate: float = 27
     notes: Optional[str] = ""
     items: List[LineItem] = []
+    total: float = 0
 
 
 class InvoiceIn(BaseModel):
-    number: Optional[str] = ""
+    number: Optional[str] = None
     customer_id: Optional[str] = ""
     customer_name: Optional[str] = ""
     job_id: Optional[str] = ""
     title: str = ""
-    status: str = "vazlat"
-    issue_date: str = ""
-    due_date: str = ""
+    status: str = "kiallitva"
+    issue_date: Optional[str] = None
+    due_date: Optional[str] = None
     payment_method: str = "atutalas"
     vat_rate: float = 27
     notes: Optional[str] = ""
     items: List[LineItem] = []
+    total: Optional[float] = None
 
 
 class WorkLog(Owned):

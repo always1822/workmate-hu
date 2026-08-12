@@ -1,7 +1,8 @@
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, FileText, FileDown, X, Hammer, Mail, Paperclip } from "lucide-react";
+import { Plus, Pencil, Trash2, FileText, FileDown, X, Hammer, Mail, Paperclip, CheckCircle2 } from "lucide-react";
 import { api, openPdf, fmtHuf, fmtDate, fileUrl, QUOTE_STATUS, quoteTotals, apiErr } from "../lib/api";
 import { Badge, Empty, PageHeader } from "../components/Shell";
 import { SendMailModal } from "../components/SendMailModal";
@@ -12,6 +13,7 @@ const EMPTY = {
   vat_rate: 27, notes: "", description: "", material_cost: 0, labor_cost: 0,
   attachment_path: "", attachment_name: "", items: [],
 };
+// Az ajánlatszám automatikus (AJ-ÉV-SSS) – a backend generálja létrehozáskor
 
 export default function Quotes() {
   const qc = useQueryClient();
@@ -59,7 +61,7 @@ export default function Quotes() {
   const del = useMutation({ mutationFn: async (id) => api.delete(`/quotes/${id}`), onSuccess: () => { qc.invalidateQueries(); toast.success("Ajánlat törölve"); } });
   const toJob = useMutation({
     mutationFn: async (id) => api.post(`/quotes/${id}/job`),
-    onSuccess: () => { qc.invalidateQueries(); toast.success("Munka létrehozva az ajánlatból"); },
+    onSuccess: () => { qc.invalidateQueries(); toast.success("Ajánlat elfogadva – a munka létrejött"); },
     onError: (e) => toast.error(apiErr(e, "Nem sikerült")),
   });
 
@@ -70,7 +72,7 @@ export default function Quotes() {
   return (
     <div data-testid="quotes-page">
       <PageHeader title="Ajánlatok" subtitle={`${data.length} árajánlat · PDF generálás egy kattintással`}>
-        <Button onClick={() => setForm({ ...EMPTY, number: `AJ-${new Date().getFullYear()}-${String(data.length + 1).padStart(3, "0")}` })} data-testid="add-quote-btn">
+        <Button onClick={() => setForm({ ...EMPTY })} data-testid="add-quote-btn">
           <Plus className="h-4 w-4" /> Új ajánlat
         </Button>
       </PageHeader>
@@ -91,16 +93,20 @@ export default function Quotes() {
                   <Td className="text-muted-foreground">{fmtDate(q.valid_until)}</Td>
                   <Td className="text-right font-display font-semibold">{fmtHuf(t.gross)}</Td>
                   <Td>
-                    <div className="flex justify-end gap-2">
+                    <div className="flex items-center justify-end gap-2">
+                      {!q.job_id ? (
+                        <Button onClick={() => toJob.mutate(q.id)} className="h-11 px-5" data-testid={`accept-quote-${q.id}`}>
+                          <CheckCircle2 className="h-4 w-4" /> Elfogadás és munka létrehozása
+                        </Button>
+                      ) : (
+                        <Link to="/munkak" className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-300" data-testid={`quote-job-link-${q.id}`}>
+                          <Hammer className="h-4 w-4" /> Munka létrehozva
+                        </Link>
+                      )}
                       <Button variant="secondary" className="h-9 px-3" onClick={() => openPdf(`/quotes/${q.id}/pdf`)} data-testid={`pdf-quote-${q.id}`}>
                         <FileDown className="h-4 w-4" /> PDF
                       </Button>
-                      <Button variant="secondary" className="h-9 w-9 px-0" onClick={() => setMailFor(q)} data-testid={`send-quote-${q.id}`}><Mail className="h-4 w-4" /></Button>
-                      {!q.job_id && (
-                        <Button variant="secondary" className="h-9 px-3" onClick={() => toJob.mutate(q.id)} data-testid={`quote-to-job-${q.id}`}>
-                          <Hammer className="h-4 w-4" /> Munka
-                        </Button>
-                      )}
+                      <Button variant="secondary" className="h-9 w-9 px-0" title="Ajánlat küldése e-mailben" onClick={() => setMailFor(q)} data-testid={`send-quote-${q.id}`}><Mail className="h-4 w-4" /></Button>
                       <Button variant="secondary" className="h-9 w-9 px-0" onClick={() => setForm({ ...EMPTY, ...q, items: q.items || [] })} data-testid={`edit-quote-${q.id}`}><Pencil className="h-4 w-4" /></Button>
                       <Button variant="secondary" className="h-9 w-9 px-0 text-destructive" onClick={() => del.mutate(q.id)} data-testid={`delete-quote-${q.id}`}><Trash2 className="h-4 w-4" /></Button>
                     </div>
@@ -125,7 +131,7 @@ export default function Quotes() {
         {form && (
           <form className="space-y-6" onSubmit={(e) => { e.preventDefault(); save.mutate(form); }}>
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-              <Field label="Ajánlat száma"><Input value={form.number} onChange={set("number")} data-testid="quote-number-input" /></Field>
+              <Field label="Ajánlat száma"><Input value={form.number || "Automatikus (AJ-ÉV-SSS)"} disabled data-testid="quote-number-input" /></Field>
               <Field label="Megnevezés *"><Input required value={form.title} onChange={set("title")} data-testid="quote-title-input" /></Field>
               <Field label="Ügyfél">
                 <Select value={form.customer_id} onChange={set("customer_id")} data-testid="quote-customer-select">

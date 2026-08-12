@@ -12,6 +12,7 @@ import Dashboard from "@/pages/Dashboard";
 import Customers from "@/pages/Customers";
 import CustomerDetail from "@/pages/CustomerDetail";
 import Jobs from "@/pages/Jobs";
+import JobDetail from "@/pages/JobDetail";
 import Quotes from "@/pages/Quotes";
 import Invoices from "@/pages/Invoices";
 import Finance from "@/pages/Finance";
@@ -61,6 +62,7 @@ const Gate = () => {
               <Route path="/ugyfelek" element={<Customers />} />
               <Route path="/ugyfelek/:id" element={<CustomerDetail />} />
               <Route path="/munkak" element={<Jobs />} />
+              <Route path="/munkak/:id" element={<JobDetail />} />
               <Route path="/ajanlatok" element={<Quotes />} />
               <Route path="/szamlak" element={<Invoices />} />
               <Route path="/penzugy" element={<Finance />} />

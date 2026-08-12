@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Hammer, LayoutGrid, List, Receipt } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Plus, Pencil, Trash2, Hammer, LayoutGrid, List, CheckCircle2, ArrowRight, CalendarDays } from "lucide-react";
+import { Link } from "react-router-dom";
 import { api, fmtHuf, fmtDate, JOB_STATUS, PRIORITY, apiErr } from "../lib/api";
 import { Badge, Card, Empty, PageHeader } from "../components/Shell";
 import { Button, Field, Input, Modal, Select, TableWrap, Td, Textarea, Th } from "../components/Fields";
@@ -13,7 +13,6 @@ export default function Jobs() {
   const qc = useQueryClient();
   const [form, setForm] = useState(null);
   const [view, setView] = useState("lista");
-  const navigate = useNavigate();
   const { data = [] } = useQuery({ queryKey: ["jobs"], queryFn: async () => (await api.get("/jobs")).data });
   const { data: customers = [] } = useQuery({ queryKey: ["customers"], queryFn: async () => (await api.get("/customers")).data });
 
@@ -26,9 +25,10 @@ export default function Jobs() {
     onError: () => toast.error("Mentés sikertelen"),
   });
   const del = useMutation({ mutationFn: async (id) => api.delete(`/jobs/${id}`), onSuccess: () => { qc.invalidateQueries(); toast.success("Munka törölve"); } });
-  const toInvoice = useMutation({
-    mutationFn: async (id) => api.post(`/jobs/${id}/invoice`),
-    onSuccess: () => { qc.invalidateQueries(); toast.success("Számla előkészítve"); navigate("/szamlak"); },
+  // Készre jelentés: a munka kész állapotba kerül és bekerül a „Számlázásra vár” listába
+  const markDone = useMutation({
+    mutationFn: async (job) => api.put(`/jobs/${job.id}`, { ...job, status: "elkeszult" }),
+    onSuccess: () => { qc.invalidateQueries(); toast.success("Készre jelentve – a Számlák oldalon kiállíthatod a számlát"); },
     onError: (e) => toast.error(apiErr(e, "Nem sikerült")),
   });
   const setStatus = useMutation({
@@ -53,6 +53,7 @@ export default function Jobs() {
             </button>
           ))}
         </div>
+        <Link to="/naptar"><Button variant="secondary" data-testid="jobs-calendar-link"><CalendarDays className="h-4 w-4" /> Naptár</Button></Link>
         <Button onClick={() => setForm({ ...EMPTY })} data-testid="add-job-btn"><Plus className="h-4 w-4" /> Új munka</Button>
       </PageHeader>
 
@@ -64,7 +65,7 @@ export default function Jobs() {
           <tbody>
             {data.map((j) => (
               <tr key={j.id} className="transition-colors hover:bg-accent/50" data-testid={`job-row-${j.id}`}>
-                <Td><div className="font-semibold">{j.title}</div><div className="max-w-xs truncate text-xs text-muted-foreground">{j.description || "—"}</div></Td>
+                <Td><Link to={`/munkak/${j.id}`} className="font-semibold text-foreground hover:text-primary hover:underline" data-testid={`job-link-${j.id}`}>{j.title}</Link><div className="max-w-xs truncate text-xs text-muted-foreground">{j.description || "—"}</div></Td>
                 <Td className="text-muted-foreground">{j.customer_name || "—"}</Td>
                 <Td><Badge cls={(JOB_STATUS[j.status] || {}).cls}>{(JOB_STATUS[j.status] || {}).label || j.status}</Badge></Td>
                 <Td className="text-muted-foreground">{PRIORITY[j.priority] || j.priority}</Td>
@@ -72,9 +73,13 @@ export default function Jobs() {
                 <Td className="text-right font-display font-semibold">{fmtHuf(j.value)}</Td>
                 <Td>
                   <div className="flex justify-end gap-2">
-                    {j.status === "elkeszult" && (
-                      <Button variant="secondary" className="h-9 px-3" onClick={() => toInvoice.mutate(j.id)} data-testid={`job-to-invoice-${j.id}`}>
-                        <Receipt className="h-4 w-4" /> Számla
+                    {j.status === "elkeszult" ? (
+                      <Link to="/szamlak" className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-300" data-testid={`to-invoice-${j.id}`}>
+                        <ArrowRight className="h-4 w-4" /> Számlázásra vár
+                      </Link>
+                    ) : (
+                      <Button className="h-9 px-3" onClick={() => markDone.mutate(j)} data-testid={`mark-done-${j.id}`}>
+                        <CheckCircle2 className="h-4 w-4" /> Készre jelentés
                       </Button>
                     )}
                     <Button variant="secondary" className="h-9 w-9 px-0" onClick={() => setForm(j)} data-testid={`edit-job-${j.id}`}><Pencil className="h-4 w-4" /></Button>

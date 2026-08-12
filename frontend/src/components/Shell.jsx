@@ -1,26 +1,48 @@
 import { useEffect, useState } from "react";
 import { NavLink, useLocation, Link } from "react-router-dom";
-import { LayoutDashboard, Users, Hammer, FileText, Building2, FolderOpen, ClockFading, Menu, X, Moon, Sun, ChevronLeft, Receipt, ChartBar as BarChart3, Settings2, LogOut, Wallet, CalendarDays } from "lucide-react";
+import { LayoutDashboard, Users, Hammer, FileText, FolderOpen, Menu, X, Moon, Sun, ChevronLeft, Receipt, Settings2, LogOut } from "lucide-react";
 import { cn } from "../lib/utils";
 import { useAuth } from "../context/AuthContext";
 import { GlobalSearch } from "./GlobalSearch";
 import { NotificationBell } from "./NotificationBell";
 import { PublicFooter } from "./PublicShell";
 
-const NAV = [
+// A fő menü sorrendje a fő üzleti folyamatot követi: Ügyfél → Ajánlat → Munka → Számla → Fizetve
+const MAIN_NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, id: "dashboard" },
   { to: "/ugyfelek", label: "Ügyfelek", icon: Users, id: "customers" },
-  { to: "/munkak", label: "Munkák", icon: Hammer, id: "jobs" },
   { to: "/ajanlatok", label: "Ajánlatok", icon: FileText, id: "quotes" },
+  { to: "/munkak", label: "Munkák", icon: Hammer, id: "jobs" },
   { to: "/szamlak", label: "Számlák", icon: Receipt, id: "invoices" },
-  { to: "/penzugy", label: "Pénzügy", icon: Wallet, id: "finance" },
-  { to: "/riportok", label: "Riportok", icon: BarChart3, id: "reports" },
-  { to: "/naptar", label: "Naptár", icon: CalendarDays, id: "calendar" },
-  { to: "/munkanaplo", label: "Munkanapló", icon: ClockFading, id: "worklog" },
-  { to: "/dokumentumok", label: "Dokumentumok", icon: FolderOpen, id: "documents" },
-  { to: "/ceges-profil", label: "Céges profil", icon: Building2, id: "company" },
+];
+
+// A többi funkció (Pénzügy, Riportok, Naptár, Munkanapló, Dokumentumok, Céges profil)
+// a fő oldalakba van építve – a menüben csak a rendszerbeállítás marad.
+const SECONDARY_NAV = [
   { to: "/beallitasok", label: "Beállítások", icon: Settings2, id: "settings" },
 ];
+
+const NavItem = ({ to, label, icon: Icon, id, collapsed, main }) => (
+  <NavLink
+    to={to}
+    end={to === "/"}
+    data-testid={`nav-${id}`}
+    className={({ isActive }) =>
+      cn(
+        "group relative flex items-center rounded-xl transition-colors duration-200",
+        main ? "gap-3 px-3 py-3 text-[15px] font-bold" : "gap-2.5 px-3 py-2 text-[13px] font-medium",
+        isActive
+          ? "bg-primary text-primary-foreground shadow-[0_6px_18px_-8px_rgba(6,182,212,0.9)]"
+          : main
+            ? "text-foreground hover:bg-accent hover:text-primary"
+            : "text-muted-foreground/80 hover:bg-accent hover:text-foreground",
+      )
+    }
+  >
+    <Icon className={cn("shrink-0 transition-transform duration-200 group-hover:scale-110", main ? "h-5 w-5" : "h-4 w-4")} />
+    {!collapsed && <span className="truncate">{label}</span>}
+  </NavLink>
+);
 
 const useTheme = () => {
   const [dark, setDark] = useState(() => localStorage.getItem("wm-theme") === "dark");
@@ -70,32 +92,18 @@ export const Shell = ({ children }) => {
         </div>
 
         <nav className="wm-scroll flex-1 overflow-y-auto px-3 py-4">
-          {!collapsed && <div className="wm-label px-3 pb-3">Menü</div>}
+          {!collapsed && <div className="wm-label px-3 pb-3 text-[11px] tracking-[0.16em]">FŐ MENÜ</div>}
           <div className="space-y-1">
-            {NAV.map(({ to, label, icon: Icon, id }) => (
-              <NavLink
-                key={to}
-                to={to}
-                end={to === "/"}
-                data-testid={`nav-${id}`}
-                className={({ isActive }) =>
-                  cn(
-                    "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors duration-200",
-                    isActive
-                      ? "bg-primary/10 text-primary"
-                      : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                  )
-                }
-              >
-                {({ isActive }) => (
-                  <>
-                    {isActive && <span className="absolute left-0 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r-full bg-primary" />}
-                    <Icon className="h-[18px] w-[18px] shrink-0 transition-transform duration-200 group-hover:scale-110" />
-                    {!collapsed && <span className="truncate">{label}</span>}
-                  </>
-                )}
-              </NavLink>
-            ))}
+            {MAIN_NAV.map((n) => <NavItem key={n.to} {...n} collapsed={collapsed} main />)}
+          </div>
+          {!collapsed ? (
+            <div className="my-4 border-t border-border" />
+          ) : (
+            <div className="mx-auto my-4 h-6 w-px bg-border" />
+          )}
+          {!collapsed && <div className="wm-label px-3 pb-3 text-[11px] tracking-[0.16em]">EGYÉB</div>}
+          <div className="space-y-1">
+            {SECONDARY_NAV.map((n) => <NavItem key={n.to} {...n} collapsed={collapsed} />)}
           </div>
         </nav>
 

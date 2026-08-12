@@ -1,8 +1,8 @@
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Plus, Trash2, FileText, FolderOpen, Download, Upload } from "lucide-react";
-import { api, fmtDate, fileUrl, apiErr } from "../lib/api";
+import { Plus, Trash2, FileText, FolderOpen, Download, Upload, ExternalLink } from "lucide-react";
+import { api, fmtDate, downloadFile, apiErr } from "../lib/api";
 import { Card, Empty, PageHeader } from "../components/Shell";
 import { Button, Field, Input, Modal, Select } from "../components/Fields";
 
@@ -43,6 +43,14 @@ export default function Documents() {
     onError: () => toast.error("Mentés sikertelen"),
   });
   const del = useMutation({ mutationFn: async (id) => api.delete(`/documents/${id}`), onSuccess: () => { qc.invalidateQueries(); toast.success("Dokumentum törölve"); } });
+  const download = async (d) => {
+    try {
+      await downloadFile(d.storage_path, d.name || "fajl");
+      toast.success("Letöltés elindítva");
+    } catch (err) {
+      toast.error(apiErr(err, "A letöltés nem sikerült"));
+    }
+  };
 
   const rows = cat === "mind" ? data : data.filter((d) => d.category === cat);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -82,9 +90,12 @@ export default function Documents() {
               <div className="mt-6 flex items-center justify-between border-t border-border pt-4">
                 <div className="min-w-0 text-xs text-muted-foreground"><div className="truncate">{d.customer_name || "—"}</div><div>{fmtDate(d.created_at)}</div></div>
                 <div className="flex gap-2">
-                  {(d.storage_path || d.url) && (
-                    <a href={d.storage_path ? fileUrl(d.storage_path) : d.url} target="_blank" rel="noreferrer" data-testid={`download-document-${d.id}`}>
-                      <Button variant="secondary" className="h-9 w-9 px-0"><Download className="h-4 w-4" /></Button>
+                  {d.storage_path && (
+                    <Button variant="secondary" className="h-9 w-9 px-0" title="Letöltés" onClick={() => download(d)} data-testid={`download-document-${d.id}`}><Download className="h-4 w-4" /></Button>
+                  )}
+                  {d.url && (
+                    <a href={d.url} target="_blank" rel="noreferrer" title="Megnyitás" data-testid={`open-document-${d.id}`}>
+                      <Button variant="secondary" className="h-9 w-9 px-0"><ExternalLink className="h-4 w-4" /></Button>
                     </a>
                   )}
                   <Button variant="secondary" className="h-9 w-9 px-0 text-destructive" onClick={() => del.mutate(d.id)} data-testid={`delete-document-${d.id}`}><Trash2 className="h-4 w-4" /></Button>

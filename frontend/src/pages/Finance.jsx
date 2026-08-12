@@ -21,7 +21,7 @@ export default function Finance() {
   const [form, setForm] = useState(null);
   const [filter, setFilter] = useState("mind");
   const { data = [] } = useQuery({ queryKey: ["payments"], queryFn: async () => (await api.get("/payments")).data });
-  const { data: reports } = useQuery({ queryKey: ["reports"], queryFn: async () => (await api.get("/reports")).data });
+  const { data: stats } = useQuery({ queryKey: ["stats"], queryFn: async () => (await api.get("/stats")).data });
   const { data: customers = [] } = useQuery({ queryKey: ["customers"], queryFn: async () => (await api.get("/customers")).data });
 
   const save = useMutation({
@@ -46,10 +46,10 @@ export default function Finance() {
       </PageHeader>
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat icon={Wallet} label="Számlázott bevétel" value={fmtHuf(reports?.yearly_revenue)} tone="bg-primary/10 text-primary" testid="finance-revenue" />
-        <Stat icon={TrendingUp} label="Egyéb bevétel" value={fmtHuf(income)} tone="bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10" testid="finance-income" />
-        <Stat icon={TrendingDown} label="Kiadás" value={fmtHuf(expense)} tone="bg-red-50 text-red-500 dark:bg-red-500/10" testid="finance-expense" />
-        <Stat icon={PiggyBank} label="Profit (éves)" value={fmtHuf(reports?.yearly_profit)} tone="bg-amber-50 text-amber-600 dark:bg-amber-500/10" testid="finance-profit" />
+        <Stat icon={Wallet} label="Számlázott bevétel (éves)" value={fmtHuf(stats?.yearly_revenue)} tone="bg-primary/10 text-primary" testid="finance-revenue" />
+        <Stat icon={TrendingUp} label="Egyéb bevétel (éves)" value={fmtHuf(stats?.extra_income)} tone="bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10" testid="finance-income" />
+        <Stat icon={TrendingDown} label="Kiadás (éves)" value={fmtHuf(stats?.yearly_expense)} tone="bg-red-50 text-red-500 dark:bg-red-500/10" testid="finance-expense" />
+        <Stat icon={PiggyBank} label="Profit (éves)" value={fmtHuf(stats?.profit)} tone="bg-amber-50 text-amber-600 dark:bg-amber-500/10" testid="finance-profit" />
       </div>
 
       <div className="mb-6 mt-8 flex flex-wrap gap-2">
